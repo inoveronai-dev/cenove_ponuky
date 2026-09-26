@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { QUOTE_STATUSES } from "@/lib/brand";
+import {
+  INSTALL_SERVICES,
+  PRODUCT_CATEGORIES,
+  QUOTE_STATUSES,
+  propertyTypeLabel,
+} from "@/lib/brand";
 import { getQuoteById, getQuoteViews } from "@/lib/quotes/data";
 import { publicQuoteUrl } from "@/lib/quotes/public-id";
 import {
@@ -13,6 +18,19 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { QuoteActions } from "@/components/quotes/quote-actions";
 import { SendQuoteEmailButton } from "@/components/quotes/send-email-button";
+import type { QuoteLineItem } from "@/types/database";
+
+function lineItemSummary(items: QuoteLineItem[] | null | undefined) {
+  if (!items?.length) return "—";
+  return items
+    .map((item) => {
+      const cat =
+        PRODUCT_CATEGORIES.find((c) => c.value === item.category)?.label ||
+        item.category;
+      return `${item.count}× ${cat} (${item.widthMm} × ${item.heightMm} mm)`;
+    })
+    .join(", ");
+}
 
 export default async function QuoteDetailPage({
   params,
@@ -27,6 +45,27 @@ export default async function QuoteDetailPage({
   if (!quote) notFound();
 
   const timeline = await getQuoteViews(quote.id);
+
+  const services = INSTALL_SERVICES.filter((s) => {
+    switch (s.key) {
+      case "montaz":
+        return quote.montaz;
+      case "demontazStarych":
+        return quote.demontaz_starych;
+      case "likvidacia":
+        return quote.likvidacia;
+      case "parapetVnutorny":
+        return quote.parapet_vnutorny;
+      case "parapetVonkajsi":
+        return quote.parapet_vonkajsi;
+      case "sieteProtiHmyzu":
+        return quote.siete_proti_hmyzu;
+      case "otherService":
+        return quote.other_service;
+      default:
+        return false;
+    }
+  });
 
   return (
     <div className="space-y-6">
@@ -65,7 +104,7 @@ export default async function QuoteDetailPage({
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Zákazník a trasa</CardTitle>
+            <CardTitle className="text-base">Zákazník a montáž</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <p>
@@ -77,14 +116,20 @@ export default async function QuoteDetailPage({
               {quote.customer_phone || "—"}
             </p>
             <p>
-              <span className="text-muted-foreground">Trasa: </span>
-              {[quote.origin_address, quote.destination_address]
-                .filter(Boolean)
-                .join(" → ") || "—"}
+              <span className="text-muted-foreground">Adresa montáže: </span>
+              {quote.site_address || "—"}
             </p>
             <p>
-              <span className="text-muted-foreground">Termín: </span>
-              {formatDateSk(quote.move_date)}
+              <span className="text-muted-foreground">Typ objektu: </span>
+              {propertyTypeLabel(quote.property_type) || "—"}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Poschodie: </span>
+              {quote.floor != null ? `${quote.floor}.` : "—"}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Termín montáže: </span>
+              {formatDateSk(quote.install_date)}
             </p>
           </CardContent>
         </Card>
@@ -94,8 +139,10 @@ export default async function QuoteDetailPage({
             <CardTitle className="text-base">Cenový prehľad</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <p>Práca: {formatCurrency(Number(quote.labor_amount || 0))}</p>
-            <p>Doprava: {formatCurrency(Number(quote.transport_amount || 0))}</p>
+            <p>
+              Produkty: {formatCurrency(Number(quote.products_amount || 0))}
+            </p>
+            <p>Montáž: {formatCurrency(Number(quote.montaz_amount || 0))}</p>
             <p>Doplnky: {formatCurrency(Number(quote.extras_amount || 0))}</p>
             <p className="pt-2 text-lg font-semibold">
               {quote.price_min != null && quote.price_max != null
@@ -135,17 +182,19 @@ export default async function QuoteDetailPage({
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Parametre sťahovania</CardTitle>
+            <CardTitle className="text-base">Detail ponuky</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <p>Hodiny: {quote.estimated_hours ?? "—"}</p>
-            <p>Pracovníci: {quote.workers ?? "—"}</p>
             <p>
-              Vzdialenosť:{" "}
-              {quote.distance_km != null ? `${quote.distance_km} km` : "—"}
+              <span className="text-muted-foreground">Položky: </span>
+              {lineItemSummary(quote.line_items)}
             </p>
-            <p>Krabice: {quote.box_count ?? "—"}</p>
-            <p>Veľké položky: {quote.large_items || "—"}</p>
+            <p>
+              <span className="text-muted-foreground">Služby: </span>
+              {services.length > 0
+                ? services.map((s) => s.label).join(", ")
+                : "—"}
+            </p>
             {quote.internal_notes && (
               <p className="pt-2 text-muted-foreground">
                 Interné: {quote.internal_notes}

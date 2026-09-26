@@ -104,8 +104,7 @@ export async function getCompanyQuotes(
       quotes = quotes.filter(
         (q) =>
           q.customer_name?.toLowerCase().includes(s) ||
-          q.origin_address?.toLowerCase().includes(s) ||
-          q.destination_address?.toLowerCase().includes(s) ||
+          q.site_address?.toLowerCase().includes(s) ||
           q.public_id?.toLowerCase().includes(s)
       );
     }
@@ -136,8 +135,7 @@ export async function getCompanyQuotes(
     quotes = quotes.filter(
       (q) =>
         q.customer_name?.toLowerCase().includes(s) ||
-        q.origin_address?.toLowerCase().includes(s) ||
-        q.destination_address?.toLowerCase().includes(s) ||
+        q.site_address?.toLowerCase().includes(s) ||
         q.public_id?.toLowerCase().includes(s)
     );
   }

@@ -1,20 +1,27 @@
 import OpenAI from "openai";
 import { z } from "zod";
-import { propertyTypeLabel } from "@/lib/brand";
+import {
+  glazingLabel,
+  productCategoryLabel,
+  propertyTypeLabel,
+} from "@/lib/brand";
 import { quickInputSchema, type QuickInputResult } from "@/lib/quotes/schemas";
+import type { QuoteLineItem } from "@/types/database";
 
 export type QuoteCopyInput = {
   customerName: string;
   customerFirstName?: string | null;
-  originAddress?: string | null;
-  destinationAddress?: string | null;
-  originPropertyType?: string | null;
-  boxCount?: number | null;
-  largeItems?: string | null;
-  disassembly?: boolean;
-  assembly?: boolean;
-  packing?: boolean;
-  moveDate?: string | null;
+  siteAddress?: string | null;
+  propertyType?: string | null;
+  floor?: number | null;
+  lineItems?: QuoteLineItem[];
+  montaz?: boolean;
+  demontazStarych?: boolean;
+  likvidacia?: boolean;
+  parapetVnutorny?: boolean;
+  parapetVonkajsi?: boolean;
+  sieteProtiHmyzu?: boolean;
+  installDate?: string | null;
   customerNotes?: string | null;
 };
 
@@ -41,32 +48,44 @@ function politeName(input: QuoteCopyInput): string {
   return input.customerName;
 }
 
+function summarizeItems(items: QuoteLineItem[] | undefined): string {
+  if (!items?.length) return "položky podľa dohodnutého rozsahu";
+  return items
+    .map((item) => {
+      const cat = productCategoryLabel(item.category);
+      const size = `${item.widthMm}×${item.heightMm} mm`;
+      const color = item.color ? `, ${item.color}` : "";
+      const glass = item.glazing ? `, ${glazingLabel(item.glazing)}` : "";
+      return `${item.count}× ${cat} (${size}${color}${glass})`;
+    })
+    .join("; ");
+}
+
 export function buildFallbackCopy(input: QuoteCopyInput): QuoteCopyResult {
   const name = politeName(input);
-  const property = propertyTypeLabel(input.originPropertyType);
-  const origin = input.originAddress || "východiskovej adresy";
-  const destination = input.destinationAddress || "cieľovej adresy";
-  const boxes =
-    input.boxCount != null
-      ? `približne ${input.boxCount} krabíc`
-      : "veci podľa dohodnutého rozsahu";
-  const items = input.largeItems?.trim()
-    ? `, ${input.largeItems.trim()}`
-    : "";
+  const property = propertyTypeLabel(input.propertyType);
+  const site = input.siteAddress || "uvedenej adrese";
+  const itemsText = summarizeItems(input.lineItems);
   const extras: string[] = [];
-  if (input.disassembly) extras.push("demontáž vybraného nábytku");
-  if (input.assembly) extras.push("montáž nábytku");
-  if (input.packing) extras.push("balenie vecí");
+  if (input.montaz) extras.push("montáž");
+  if (input.demontazStarych) extras.push("demontáž starých výplní");
+  if (input.likvidacia) extras.push("likvidáciu");
+  if (input.parapetVnutorny) extras.push("vnútorné parapety");
+  if (input.parapetVonkajsi) extras.push("vonkajšie parapety");
+  if (input.sieteProtiHmyzu) extras.push("siete proti hmyzu");
   const extrasText =
-    extras.length > 0 ? ` Súčasťou realizácie bude aj ${extras.join(", ")}.` : "";
-
+    extras.length > 0
+      ? ` Súčasťou ponuky je aj ${extras.join(", ")}.`
+      : "";
   const propertyPart = property ? `${property} ` : "";
+  const floorPart =
+    input.floor != null ? ` (${input.floor}. poschodie)` : "";
 
   return {
-    aiIntro: `Dobrý deň, ${name},\n\nna základe informácií, ktoré ste nám poskytli, sme pre vás pripravili orientačný cenový odhad sťahovania. Cieľom je, aby ste ešte pred realizáciou mali jasnú predstavu o rozsahu služby aj približnej cene.`,
-    aiSummary: `Počítame so sťahovaním ${propertyPart}z ${origin} do ${destination}. Ide o ${boxes}${items}.${extrasText}`,
+    aiIntro: `Dobrý deň, ${name},\n\nna základe informácií, ktoré ste nám poskytli, sme pre vás pripravili orientačný cenový odhad dodávky a montáže okien, dverí a súvisiacich produktov. Cieľom je, aby ste ešte pred realizáciou mali jasnú predstavu o rozsahu aj približnej cene.`,
+    aiSummary: `Počítame s realizáciou na adrese ${site}${floorPart} — ${propertyPart}objekt. V ponuke: ${itemsText}.${extrasText}`,
     aiScopeNote:
-      "Cena vychádza z informácií uvedených vyššie. Presná suma závisí od skutočného objemu vecí, prístupnosti oboch adries a reálneho času realizácie.",
+      "Cena vychádza z uvedených rozmerov a rozsahu. Presná suma závisí od zamerania na mieste, typu profilu, zasklenia, farby a prístupnosti objektu.",
     source: "fallback",
   };
 }
@@ -92,7 +111,7 @@ export async function generateQuoteCopy(
       messages: [
         {
           role: "system",
-          content: `Si copywriter pre slovenskú sťahovaciu firmu. Píšeš profesionálne, ľudsky, teplo a stručne. Bez emoji, bez marketingových fráz, bez vymyslených údajov. Odpovedz JSON: {"aiIntro":"...","aiSummary":"...","aiScopeNote":"..."}. Jazyk: slovenčina.`,
+          content: `Si copywriter pre slovenskú firmu TOP Okno Trenčín (okná, dvere, tieniaca technika, garážové brány). Píšeš profesionálne, ľudsky a stručne. Bez emoji, bez marketingových fráz, bez vymyslených údajov. Odpovedz JSON: {"aiIntro":"...","aiSummary":"...","aiScopeNote":"..."}. Jazyk: slovenčina.`,
         },
         {
           role: "user",
@@ -113,22 +132,20 @@ export async function generateQuoteCopy(
 
 export async function parseQuickInput(text: string): Promise<QuickInputResult> {
   const empty: QuickInputResult = {
-    originAddress: null,
-    destinationAddress: null,
+    siteAddress: null,
     propertyType: null,
     floor: null,
-    elevator: null,
-    boxCount: null,
-    largeItems: null,
-    disassembly: null,
-    assembly: null,
-    packing: null,
-    moveDate: null,
+    installDate: null,
     notes: null,
-    estimatedHours: null,
-    workers: null,
-    distanceKm: null,
     customerName: null,
+    category: null,
+    widthMm: null,
+    heightMm: null,
+    count: null,
+    color: null,
+    glazing: null,
+    montaz: null,
+    demontazStarych: null,
   };
 
   const client = getOpenAI();
@@ -144,10 +161,12 @@ export async function parseQuickInput(text: string): Promise<QuickInputResult> {
       messages: [
         {
           role: "system",
-          content: `Extrahuj údaje o sťahovaní zo slovenskej poznámky. Nevymýšľaj hodnoty — chýbajúce daj null.
-propertyType musí byť jeden z: garsonka, 1_izbovy, 2_izbovy, 3_izbovy, 4_izbovy, rodinny_dom, kancelaria, sklad, ine.
-moveDate vo formáte YYYY-MM-DD ak vieš, inak null.
-Vráť JSON s kľúčmi: originAddress, destinationAddress, propertyType, floor, elevator, boxCount, largeItems, disassembly, assembly, packing, moveDate, notes, estimatedHours, workers, distanceKm, customerName.`,
+          content: `Extrahuj údaje o cenovej ponuke na okná/dvere/tienenie zo slovenskej poznámky. Nevymýšľaj hodnoty — chýbajúce daj null.
+propertyType: byt, rodinny_dom, kancelaria, ine.
+category: plastove_okna, plastove_dvere, hlinikove_systemy, interierove_dvere, tieniaca_technika, garazove_brany.
+glazing: dvojsklo, trojsklo, ine.
+installDate vo formáte YYYY-MM-DD ak vieš.
+Vráť JSON: siteAddress, propertyType, floor, installDate, notes, customerName, category, widthMm, heightMm, count, color, glazing, montaz, demontazStarych.`,
         },
         { role: "user", content: text },
       ],
@@ -167,41 +186,50 @@ function heuristicParse(text: string, empty: QuickInputResult): QuickInputResult
   const lower = text.toLowerCase();
   const result = { ...empty };
 
-  const boxMatch = lower.match(/(\d+)\s*krab/);
-  if (boxMatch) result.boxCount = Number(boxMatch[1]);
+  if (/hlin[ií]k/.test(lower)) result.category = "hlinikove_systemy";
+  else if (/gar[aá][zž]/.test(lower)) result.category = "garazove_brany";
+  else if (/žal[uú]z|rolet|plisse|mark[ií]z|tieni/.test(lower))
+    result.category = "tieniaca_technika";
+  else if (/interi[eé]rov/.test(lower)) result.category = "interierove_dvere";
+  else if (/dver/.test(lower)) result.category = "plastove_dvere";
+  else if (/okn/.test(lower)) result.category = "plastove_okna";
 
-  if (/3[\s-]?izb/.test(lower)) result.propertyType = "3_izbovy";
-  else if (/2[\s-]?izb/.test(lower)) result.propertyType = "2_izbovy";
-  else if (/1[\s-]?izb/.test(lower)) result.propertyType = "1_izbovy";
-  else if (/gars[oó]n/.test(lower)) result.propertyType = "garsonka";
-  else if (/dom/.test(lower)) result.propertyType = "rodinny_dom";
+  if (/rodinn|dom/.test(lower)) result.propertyType = "rodinny_dom";
+  else if (/byt/.test(lower)) result.propertyType = "byt";
+  else if (/kancel/.test(lower)) result.propertyType = "kancelaria";
 
   const floorMatch = lower.match(/(\d+)\.?\s*poschod/);
   if (floorMatch) result.floor = Number(floorMatch[1]);
 
-  if (/výťah|vytah/.test(lower)) {
-    result.elevator = !/bez výťahu|bez vytahu|výťah nie|vytah nie/.test(lower);
+  const dimMatch = lower.match(/(\d{3,4})\s*[x×]\s*(\d{3,4})/);
+  if (dimMatch) {
+    result.widthMm = Number(dimMatch[1]);
+    result.heightMm = Number(dimMatch[2]);
   }
 
-  if (/demont|rozobrať|rozobrat/.test(lower)) result.disassembly = true;
-  if (/montáž|montaz/.test(lower) && !/demont/.test(lower)) result.assembly = true;
-  if (/balen/.test(lower)) result.packing = true;
-
-  const routeMatch = text.match(/(.+?)\s+(?:do|→|->)\s+(.+?)(?:,|\.|$)/i);
-  if (routeMatch) {
-    result.originAddress = routeMatch[1].replace(/^\d+\s*izb[^\s]*\s*/i, "").trim();
-    result.destinationAddress = routeMatch[2].trim();
+  const countMatch = lower.match(/(\d+)\s*[x×]\s*(?:okn|dver|ks)/);
+  if (countMatch) result.count = Number(countMatch[1]);
+  else {
+    const ks = lower.match(/(\d+)\s*ks/);
+    if (ks) result.count = Number(ks[1]);
   }
 
-  const items: string[] = [];
-  if (/sedač|gauč|gauc/.test(lower)) items.push("sedačka");
-  if (/poste[ľl]/.test(lower)) items.push("posteľ");
-  if (/práč|prac/.test(lower)) items.push("práčka");
-  if (/skrin/.test(lower)) {
-    const m = lower.match(/(\d+)\s*skrin/);
-    items.push(m ? `${m[1]} skrine` : "skrine");
+  if (/trojsklo/.test(lower)) result.glazing = "trojsklo";
+  else if (/dvojsklo/.test(lower)) result.glazing = "dvojsklo";
+
+  if (/mont[aá][zž]/.test(lower) && !/demont/.test(lower)) result.montaz = true;
+  if (/demont/.test(lower)) result.demontazStarych = true;
+
+  const addrMatch = text.match(
+    /(?:adresa|mont[aá][zž]\s+na|na adrese)[:\s]+([^,.]+)/i
+  );
+  if (addrMatch) result.siteAddress = addrMatch[1].trim();
+  else if (/tren[cč][ií]n|bratislava|žilina|nitra|trnave?/i.test(text)) {
+    const city = text.match(
+      /(Trenčín|Bratislava|Žilina|Nitra|Trnava|Piešťany)[^,]*/i
+    );
+    if (city) result.siteAddress = city[0].trim();
   }
-  if (items.length) result.largeItems = items.join(", ");
 
   result.notes = text.trim();
   return result;

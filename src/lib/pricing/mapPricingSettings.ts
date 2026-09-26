@@ -1,47 +1,30 @@
 import type { PricingSettings } from "@/types/database";
-import type { PricingSettingsInput } from "@/lib/pricing/calculateQuoteEstimate";
+import {
+  DEFAULT_PRICING,
+  type PricingSettingsInput,
+} from "@/lib/pricing/calculateQuoteEstimate";
 
 export function mapPricingSettings(
   row: PricingSettings | null | undefined
 ): PricingSettingsInput {
-  if (!row) {
-    return {
-      hourlyRatePerWorker: 38,
-      kilometerRate: 0.65,
-      routeMultiplier: 1,
-      fixedFee: 90,
-      disassemblySurcharge: 70,
-      assemblySurcharge: 70,
-      packingSurcharge: 80,
-      packingMaterialSurcharge: 40,
-      heavyItemsSurcharge: 60,
-      disposalSurcharge: 50,
-      protectiveWrappingSurcharge: 45,
-      otherSurcharge: 0,
-      minimumJobPrice: 0,
-      weekendSurchargePercent: 0,
-      eveningSurchargePercent: 0,
-      bufferMinMultiplier: 0.92,
-      bufferMaxMultiplier: 1.12,
-    };
-  }
+  if (!row) return { ...DEFAULT_PRICING };
 
   return {
-    hourlyRatePerWorker: Number(row.hourly_rate_per_worker),
-    kilometerRate: Number(row.kilometer_rate),
-    routeMultiplier: Number(row.route_multiplier),
+    pricePerM2PlastoveOkna: Number(row.price_per_m2_plastove_okna),
+    pricePerM2PlastoveDvere: Number(row.price_per_m2_plastove_dvere),
+    pricePerM2Hlinik: Number(row.price_per_m2_hlinik),
+    pricePerM2InterieroveDvere: Number(row.price_per_m2_interierove_dvere),
+    pricePerM2Tieniaca: Number(row.price_per_m2_tieniaca),
+    pricePerM2GarazoveBrany: Number(row.price_per_m2_garazove_brany),
     fixedFee: Number(row.fixed_fee),
-    disassemblySurcharge: Number(row.disassembly_surcharge),
-    assemblySurcharge: Number(row.assembly_surcharge),
-    packingSurcharge: Number(row.packing_surcharge),
-    packingMaterialSurcharge: Number(row.packing_material_surcharge),
-    heavyItemsSurcharge: Number(row.heavy_items_surcharge),
-    disposalSurcharge: Number(row.disposal_surcharge),
-    protectiveWrappingSurcharge: Number(row.protective_wrapping_surcharge),
+    montazPerM2: Number(row.montaz_per_m2),
+    demontazPerUnit: Number(row.demontaz_per_unit),
+    likvidaciaFee: Number(row.likvidacia_fee),
+    parapetVnutornyFee: Number(row.parapet_vnutorny_fee),
+    parapetVonkajsiFee: Number(row.parapet_vonkajsi_fee),
+    sieteFee: Number(row.siete_fee),
     otherSurcharge: Number(row.other_surcharge),
     minimumJobPrice: Number(row.minimum_job_price),
-    weekendSurchargePercent: Number(row.weekend_surcharge_percent),
-    eveningSurchargePercent: Number(row.evening_surcharge_percent),
     bufferMinMultiplier: Number(row.buffer_min_multiplier),
     bufferMaxMultiplier: Number(row.buffer_max_multiplier),
   };

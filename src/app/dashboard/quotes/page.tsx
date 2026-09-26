@@ -54,8 +54,8 @@ export default async function QuotesPage({
               <thead className="text-muted-foreground">
                 <tr className="border-b border-border">
                   <th className="pb-3 font-medium">Klient</th>
-                  <th className="pb-3 font-medium">Trasa</th>
-                  <th className="pb-3 font-medium">Termín</th>
+                  <th className="pb-3 font-medium">Adresa montáže</th>
+                  <th className="pb-3 font-medium">Termín montáže</th>
                   <th className="pb-3 font-medium">Odhad</th>
                   <th className="pb-3 font-medium">Stav</th>
                   <th className="pb-3 font-medium">Otvorenia</th>
@@ -68,11 +68,9 @@ export default async function QuotesPage({
                   <tr key={q.id} className="border-b border-border/70">
                     <td className="py-3 font-medium">{q.customer_name}</td>
                     <td className="py-3 text-muted-foreground">
-                      {[q.origin_address, q.destination_address]
-                        .filter(Boolean)
-                        .join(" → ") || "—"}
+                      {q.site_address || "—"}
                     </td>
-                    <td className="py-3">{formatDateSk(q.move_date)}</td>
+                    <td className="py-3">{formatDateSk(q.install_date)}</td>
                     <td className="py-3">
                       {q.price_min != null && q.price_max != null
                         ? `${formatCurrency(q.price_min)} – ${formatCurrency(q.price_max)}`

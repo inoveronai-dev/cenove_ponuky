@@ -67,8 +67,7 @@ export async function recordQuoteView(input: RecordViewInput) {
           company_id: quote.company_id,
           created_by: quote.created_by,
           customer_name: quote.customer_name,
-          origin_address: quote.origin_address,
-          destination_address: quote.destination_address,
+          site_address: quote.site_address,
           price_min: quote.price_min,
           price_max: quote.price_max,
           last_notified_at: quote.last_notified_at,
@@ -87,7 +86,7 @@ export async function recordQuoteView(input: RecordViewInput) {
   const { data: quote, error } = await admin
     .from("quotes")
     .select(
-      "id, company_id, created_by, status, customer_name, origin_address, destination_address, price_min, price_max, first_viewed_at, view_count, unique_session_count, last_notified_at, archived_at"
+      "id, company_id, created_by, status, customer_name, site_address, price_min, price_max, first_viewed_at, view_count, unique_session_count, last_notified_at, archived_at"
     )
     .eq("public_id", input.publicId)
     .is("archived_at", null)
@@ -145,8 +144,7 @@ export async function recordQuoteView(input: RecordViewInput) {
       company_id: quote.company_id,
       created_by: quote.created_by,
       customer_name: quote.customer_name,
-      origin_address: quote.origin_address,
-      destination_address: quote.destination_address,
+      site_address: quote.site_address,
       price_min: quote.price_min,
       price_max: quote.price_max,
       last_notified_at: quote.last_notified_at,

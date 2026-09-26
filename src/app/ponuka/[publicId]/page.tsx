@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Check } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
-import { BRAND, CLIENT_BRAND, vehicleTypeLabel } from "@/lib/brand";
+import { BRAND, CLIENT_BRAND } from "@/lib/brand";
 import { getPublicQuoteByPublicId } from "@/lib/quotes/data";
 import { toPublicQuoteDto } from "@/lib/quotes/public-dto";
 import type { Quote } from "@/types/database";
@@ -41,63 +41,27 @@ export default async function PublicQuotePage({
   const brandDark = CLIENT_BRAND.primaryDark;
 
   const included = [
-    { show: true, label: "Naloženie vecí" },
-    { show: true, label: "Vyloženie vecí" },
-    { show: true, label: "Preprava medzi adresami" },
-    { show: true, label: "Bezpečné uloženie nábytku počas prevozu" },
-    { show: true, label: "Manipulácia" },
-    { show: dto.disassembly, label: "Demontáž nábytku" },
-    { show: dto.assembly, label: "Montáž nábytku" },
-    { show: dto.packing, label: "Balenie" },
-    { show: dto.packingMaterial, label: "Baliaci materiál" },
-    { show: dto.protectiveWrapping, label: "Ochranné balenie nábytku" },
-    { show: dto.heavyItems, label: "Sťahovanie ťažkých predmetov" },
-    { show: dto.disposal, label: "Odvoz nepotrebného nábytku" },
+    { show: dto.montaz, label: "Montáž" },
+    { show: dto.demontazStarych, label: "Demontáž starých okien/dverí" },
+    { show: dto.likvidacia, label: "Likvidácia starých výplní" },
+    { show: dto.parapetVnutorny, label: "Vnútorné parapety" },
+    { show: dto.parapetVonkajsi, label: "Vonkajšie parapety" },
+    { show: dto.sieteProtiHmyzu, label: "Siete proti hmyzu" },
+    { show: dto.otherService, label: "Iné práce" },
+    { show: true, label: "Odborné poradenstvo" },
+    { show: true, label: "Zameranie" },
+    { show: true, label: "Dodávka na miesto" },
   ].filter((i) => i.show);
 
   const facts = [
-    { label: "Termín", value: dto.moveDate ? dto.moveDateLabel : null },
-    { label: "Typ priestoru", value: dto.originPropertyTypeLabel || null },
-    { label: "Odkiaľ", value: dto.originAddress },
-    { label: "Kam", value: dto.destinationAddress },
+    { label: "Adresa montáže", value: dto.siteAddress || null },
+    { label: "Typ objektu", value: dto.propertyTypeLabel || null },
     {
       label: "Poschodie",
-      value: dto.originFloor != null ? `${dto.originFloor}. poschodie` : null,
+      value: dto.floor != null ? `${dto.floor}. poschodie` : null,
     },
-    {
-      label: "Výťah",
-      value:
-        dto.originElevator == null
-          ? null
-          : dto.originElevator
-            ? "Áno"
-            : "Nie",
-    },
-    {
-      label: "Počet krabíc",
-      value: dto.boxCount != null ? String(dto.boxCount) : null,
-    },
-    {
-      label: "Vzdialenosť",
-      value: dto.distanceKm != null ? `${dto.distanceKm} km` : null,
-    },
+    { label: "Termín montáže", value: dto.installDate ? dto.installDateLabel : null },
   ].filter((f) => f.value);
-
-  const items: string[] = [];
-  if (dto.boxCount != null) items.push(`Približne ${dto.boxCount} krabíc`);
-  if (dto.largeItems) {
-    dto.largeItems
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .forEach((item) =>
-        items.push(item.charAt(0).toUpperCase() + item.slice(1))
-      );
-  }
-  if (dto.wardrobesCount) items.push(`${dto.wardrobesCount}× skriňa`);
-  if (dto.bedsCount) items.push(`${dto.bedsCount}× posteľ`);
-  if (dto.sofasCount) items.push(`${dto.sofasCount}× sedačka`);
-  if (dto.appliancesCount) items.push(`${dto.appliancesCount}× spotrebič`);
 
   return (
     <div className="brand-surface min-h-screen text-[var(--brand-ink)]">
@@ -156,33 +120,20 @@ export default async function PublicQuotePage({
           )}
 
           <div className="animate-fade-up-delay mt-12 flex flex-col gap-4 rounded-lg border border-white/15 bg-white/10 p-5 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-blue-100/55">
-                  Odkiaľ
-                </p>
-                <p className="mt-1 text-lg font-medium">
-                  {dto.originAddress || "—"}
-                </p>
-              </div>
-              <div className="hidden text-blue-100/50 sm:block" aria-hidden>
-                →
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-blue-100/55">
-                  Kam
-                </p>
-                <p className="mt-1 text-lg font-medium">
-                  {dto.destinationAddress || "—"}
-                </p>
-              </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-blue-100/55">
+                Adresa montáže
+              </p>
+              <p className="mt-1 text-lg font-medium">
+                {dto.siteAddress || "—"}
+              </p>
             </div>
-            {dto.moveDate && (
+            {dto.installDate && (
               <div className="sm:text-right">
                 <p className="text-xs uppercase tracking-[0.16em] text-blue-100/55">
-                  Termín
+                  Termín montáže
                 </p>
-                <p className="mt-1 text-lg font-medium">{dto.moveDateLabel}</p>
+                <p className="mt-1 text-lg font-medium">{dto.installDateLabel}</p>
               </div>
             )}
           </div>
@@ -215,34 +166,31 @@ export default async function PublicQuotePage({
           )}
         </section>
 
-        {items.length > 0 && (
+        {dto.lineItems.length > 0 && (
           <section>
             <h2 className="font-display text-3xl text-[var(--brand-ink)] md:text-4xl">
-              Čo budeme sťahovať
+              Položky ponuky
             </h2>
             <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-              {items.map((item) => (
+              {dto.lineItems.map((item, index) => (
                 <li
-                  key={item}
+                  key={`${item.category}-${item.sizeLabel}-${index}`}
                   className="brand-grid-card px-4 py-3 text-[var(--brand-ink)]"
                 >
-                  {item}
+                  <p className="font-medium">{item.categoryLabel}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {[
+                      `${item.count}×`,
+                      item.sizeLabel,
+                      item.color,
+                      item.glazingLabel || null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
                 </li>
               ))}
             </ul>
-            {(dto.workers || dto.estimatedHours || dto.vehicleType) && (
-              <p className="mt-4 text-sm text-muted-foreground">
-                {[
-                  dto.workers ? `${dto.workers} pracovníci` : null,
-                  dto.estimatedHours
-                    ? `približne ${dto.estimatedHours} h`
-                    : null,
-                  dto.vehicleType ? vehicleTypeLabel(dto.vehicleType) : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            )}
           </section>
         )}
 
@@ -281,11 +229,11 @@ export default async function PublicQuotePage({
             {dto.priceRangeLabel}
           </p>
           <p className="mt-4 text-blue-50/90">
-            Predpokladaná cena za celé sťahovanie.
+            Predpokladaná cena za dodávku a montáž.
           </p>
           <p className="mt-6 max-w-2xl text-sm leading-relaxed text-blue-100/65">
             {dto.aiScopeNote ||
-              "Cena vychádza z informácií uvedených vyššie. Presná suma závisí od skutočného objemu vecí, prístupnosti oboch adries a reálneho času realizácie."}
+              "Cena vychádza z uvedených rozmerov a služieb. Presná suma sa potvrdí po zameraní na mieste."}
           </p>
         </section>
 
@@ -295,8 +243,8 @@ export default async function PublicQuotePage({
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             Táto cenová ponuka je orientačná a slúži ako predbežný cenový odhad.
-            Ak sa rozsah sťahovania, počet vecí alebo podmienky na mieste výrazne
-            zmenia, môže sa primerane zmeniť aj konečná cena.
+            Konečná cena sa potvrdí po zameraní — rozmery a podmienky na mieste
+            môžu ovplyvniť výslednú sumu.
           </p>
           {dto.customerNotes && (
             <p className="mt-4 text-sm text-[var(--brand-ink)]">

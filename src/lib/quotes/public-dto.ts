@@ -1,5 +1,9 @@
-import type { Quote } from "@/types/database";
-import { propertyTypeLabel } from "@/lib/brand";
+import type { Quote, QuoteLineItem } from "@/types/database";
+import {
+  glazingLabel,
+  productCategoryLabel,
+  propertyTypeLabel,
+} from "@/lib/brand";
 import { formatCurrency, formatDateSk } from "@/lib/utils";
 
 /** Sanitized public DTO — never expose internal notes or cost formula details */
@@ -7,34 +11,31 @@ export type PublicQuoteDto = {
   publicId: string;
   customerName: string;
   customerFirstName: string | null;
-  originAddress: string | null;
-  destinationAddress: string | null;
-  originPropertyType: string | null;
-  originPropertyTypeLabel: string;
-  originFloor: number | null;
-  originElevator: boolean | null;
-  destinationFloor: number | null;
-  destinationElevator: boolean | null;
-  distanceKm: number | null;
-  boxCount: number | null;
-  largeItems: string | null;
-  wardrobesCount: number | null;
-  bedsCount: number | null;
-  sofasCount: number | null;
-  appliancesCount: number | null;
-  disassembly: boolean;
-  assembly: boolean;
-  packing: boolean;
-  packingMaterial: boolean;
-  disposal: boolean;
-  heavyItems: boolean;
-  protectiveWrapping: boolean;
+  siteAddress: string | null;
+  propertyType: string | null;
+  propertyTypeLabel: string;
+  floor: number | null;
+  lineItems: {
+    category: string;
+    categoryLabel: string;
+    widthMm: number;
+    heightMm: number;
+    count: number;
+    color: string | null;
+    glazing: string | null;
+    glazingLabel: string;
+    notes: string | null;
+    sizeLabel: string;
+  }[];
+  montaz: boolean;
+  demontazStarych: boolean;
+  likvidacia: boolean;
+  parapetVnutorny: boolean;
+  parapetVonkajsi: boolean;
+  sieteProtiHmyzu: boolean;
   otherService: boolean;
-  moveDate: string | null;
-  moveDateLabel: string;
-  estimatedHours: number | null;
-  workers: number | null;
-  vehicleType: string | null;
+  installDate: string | null;
+  installDateLabel: string;
   customerNotes: string | null;
   aiIntro: string | null;
   aiSummary: string | null;
@@ -73,6 +74,21 @@ export type CompanyPublicFields = {
   primary_color: string;
 };
 
+function mapLineItems(items: QuoteLineItem[] | null | undefined) {
+  return (items || []).map((item) => ({
+    category: item.category,
+    categoryLabel: productCategoryLabel(item.category),
+    widthMm: item.widthMm,
+    heightMm: item.heightMm,
+    count: item.count,
+    color: item.color || null,
+    glazing: item.glazing || null,
+    glazingLabel: glazingLabel(item.glazing),
+    notes: item.notes || null,
+    sizeLabel: `${item.widthMm} × ${item.heightMm} mm`,
+  }));
+}
+
 export function toPublicQuoteDto(
   quote: Quote,
   company: CompanyPublicFields
@@ -88,34 +104,20 @@ export function toPublicQuoteDto(
     publicId: quote.public_id,
     customerName: quote.customer_name,
     customerFirstName: quote.customer_first_name,
-    originAddress: quote.origin_address,
-    destinationAddress: quote.destination_address,
-    originPropertyType: quote.origin_property_type,
-    originPropertyTypeLabel: propertyTypeLabel(quote.origin_property_type),
-    originFloor: quote.origin_floor,
-    originElevator: quote.origin_elevator,
-    destinationFloor: quote.destination_floor,
-    destinationElevator: quote.destination_elevator,
-    distanceKm: quote.distance_km,
-    boxCount: quote.box_count,
-    largeItems: quote.large_items,
-    wardrobesCount: quote.wardrobes_count,
-    bedsCount: quote.beds_count,
-    sofasCount: quote.sofas_count,
-    appliancesCount: quote.appliances_count,
-    disassembly: quote.disassembly,
-    assembly: quote.assembly,
-    packing: quote.packing,
-    packingMaterial: quote.packing_material,
-    disposal: quote.disposal,
-    heavyItems: quote.heavy_items,
-    protectiveWrapping: quote.protective_wrapping,
+    siteAddress: quote.site_address,
+    propertyType: quote.property_type,
+    propertyTypeLabel: propertyTypeLabel(quote.property_type),
+    floor: quote.floor,
+    lineItems: mapLineItems(quote.line_items),
+    montaz: quote.montaz,
+    demontazStarych: quote.demontaz_starych,
+    likvidacia: quote.likvidacia,
+    parapetVnutorny: quote.parapet_vnutorny,
+    parapetVonkajsi: quote.parapet_vonkajsi,
+    sieteProtiHmyzu: quote.siete_proti_hmyzu,
     otherService: quote.other_service,
-    moveDate: quote.move_date,
-    moveDateLabel: formatDateSk(quote.move_date),
-    estimatedHours: quote.estimated_hours,
-    workers: quote.workers,
-    vehicleType: quote.vehicle_type,
+    installDate: quote.install_date,
+    installDateLabel: formatDateSk(quote.install_date),
     customerNotes: quote.customer_notes,
     aiIntro: quote.ai_intro,
     aiSummary: quote.ai_summary,
