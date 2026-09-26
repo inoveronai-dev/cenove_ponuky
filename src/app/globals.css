@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+:root {
+  /* TOP okno TN palette */
+  --brand-blue: #2e5894;
+  --brand-blue-dark: #1f3f6b;
+  --brand-green: #00965e;
+  --brand-green-dark: #007a4c;
+  --brand-ink: #4a4a4a;
+
+  --background: #f4f6f9;
+  --foreground: #2a2a2a;
+  --card: #ffffff;
+  --card-foreground: #2a2a2a;
+  --muted: #e8eef5;
+  --muted-foreground: #5c6b7a;
+  --border: #d5dde8;
+  --input: #d5dde8;
+  --primary: #2e5894;
+  --primary-foreground: #ffffff;
+  --secondary: #eef3f9;
+  --secondary-foreground: #1f3f6b;
+  --accent: #00965e;
+  --accent-foreground: #ffffff;
+  --destructive: #b91c1c;
+  --destructive-foreground: #fafaf9;
+  --ring: #2e5894;
+  --sidebar: #1f3f6b;
+  --sidebar-foreground: #e8eef5;
+  --sidebar-muted: #2e5894;
+  --radius: 0.5rem;
+  --brand: #2e5894;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-brand: var(--brand);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-green: var(--brand-green);
+  --color-brand-ink: var(--brand-ink);
+  --font-sans: var(--font-geist-sans);
+  --font-display: var(--font-instrument);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-instrument), Georgia, "Times New Roman", serif;
+}
+
+/* Soft brand atmosphere — blue wash, not flat gray */
+.brand-surface {
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 0%, rgba(46, 88, 148, 0.08), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(0, 150, 94, 0.06), transparent 50%),
+    var(--background);
+}
+
+.brand-grid-card {
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: white;
+  box-shadow: 0 1px 2px rgba(31, 63, 107, 0.04);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out both;
+}
+
+.animate-fade-up-delay {
+  animation: fade-up 0.6s ease-out 0.12s both;
+}
