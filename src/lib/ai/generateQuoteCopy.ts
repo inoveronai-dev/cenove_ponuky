@@ -77,15 +77,14 @@ export function buildFallbackCopy(input: QuoteCopyInput): QuoteCopyResult {
     extras.length > 0
       ? ` Súčasťou ponuky je aj ${extras.join(", ")}.`
       : "";
-  const propertyPart = property ? `${property} ` : "";
   const floorPart =
     input.floor != null ? ` (${input.floor}. poschodie)` : "";
 
   return {
-    aiIntro: `Dobrý deň, ${name},\n\nna základe informácií, ktoré ste nám poskytli, sme pre vás pripravili orientačný cenový odhad dodávky a montáže okien, dverí a súvisiacich produktov. Cieľom je, aby ste ešte pred realizáciou mali jasnú predstavu o rozsahu aj približnej cene.`,
-    aiSummary: `Počítame s realizáciou na adrese ${site}${floorPart} — ${propertyPart}objekt. V ponuke: ${itemsText}.${extrasText}`,
+    aiIntro: `Dobrý deň, ${name},\n\nďakujeme za dopyt. Pripravili sme pre vás prehľadnú cenovú ponuku dodávky a montáže — s dôrazom na kvalitu, úsporu energie a spoľahlivú realizáciu od TOP Okno Trenčín.`,
+    aiSummary: `Realizácia: ${site}${floorPart}${property ? ` (${property})` : ""}. Rozsah: ${itemsText}.${extrasText} Všetko podľa vami uvedených parametrov.`,
     aiScopeNote:
-      "Cena vychádza z uvedených rozmerov a rozsahu. Presná suma závisí od zamerania na mieste, typu profilu, zasklenia, farby a prístupnosti objektu.",
+      "Orientačná cena vychádza výhradne z údajov v tejto ponuke (rozmery, počet, služby). Po zameraní na mieste ju vieme potvrdiť alebo upraviť — bez skrytých položiek.",
     source: "fallback",
   };
 }
@@ -111,7 +110,15 @@ export async function generateQuoteCopy(
       messages: [
         {
           role: "system",
-          content: `Si copywriter pre slovenskú firmu TOP Okno Trenčín (okná, dvere, tieniaca technika, garážové brány). Píšeš profesionálne, ľudsky a stručne. Bez emoji, bez marketingových fráz, bez vymyslených údajov. Odpovedz JSON: {"aiIntro":"...","aiSummary":"...","aiScopeNote":"..."}. Jazyk: slovenčina.`,
+          content: `Si copywriter pre slovenskú firmu TOP Okno Trenčín (okná, dvere, tieniaca technika, garážové brány).
+
+Napíš predajne príjemný, dôveryhodný text v slovenčine. Lákať môžeš kvalitou, komfortom, úsporou a odbornou montážou — ALE:
+- Použi VÝHRADNE údaje z JSON vstupu (meno, adresa, rozmery, počet, farba, zasklenie, služby, termín).
+- NIKDY nevymýšľaj iné rozmery, počty, adresy, produkty ani ceny.
+- Ak niečo vo vstupe chýba, nespomínaj to.
+- Bez emoji, bez klamstiev, bez fiktívnych akcií/zliav.
+
+Odpovedz JSON: {"aiIntro":"...","aiSummary":"...","aiScopeNote":"..."}.`,
         },
         {
           role: "user",
@@ -179,7 +186,7 @@ Pravidlá:
 - customerFirstName / customerLastName: rozdeľ celé meno (napr. „Pavol Marek“ → Pavol / Marek). customerName = celé meno.
 - customerPhone: normalizuj na formát 0XXX XXX XXX alebo 09XX XXX XXX (odstráň pomlčky, nechaj medzery podľa slovenskej konvencie).
 - customerEmail: ak je v texte.
-- siteAddress: mesto/ulica (napr. „Trenčín“).
+- siteAddress: CELÁ adresa montáže vrátane ulice a čísla (napr. „Štefánikova 7, Trenčín“). Nikdy nevynechávaj ulicu, ak je v texte.
 - propertyType: byt | rodinny_dom | kancelaria | ine (rodinný dom → rodinny_dom).
 - floor: číslo poschodia, inak null.
 - installDate: YYYY-MM-DD (napr. 15.10.2026 → 2026-10-15). Ak je len deň.mesiac bez roku, použi aktuálny/nasledujúci logický rok.
@@ -260,12 +267,37 @@ function mergeQuickParse(
   base: QuickInputResult,
   overlay: Partial<QuickInputResult>
 ): QuickInputResult {
-  return {
+  const merged = {
     ...base,
     ...Object.fromEntries(
       Object.entries(overlay).filter(([, v]) => v !== null && v !== undefined)
     ),
   } as QuickInputResult;
+
+  merged.siteAddress = preferRicherAddress(
+    base.siteAddress,
+    overlay.siteAddress ?? null
+  );
+
+  return merged;
+}
+
+function preferRicherAddress(
+  a?: string | null,
+  b?: string | null
+): string | null {
+  const x = (a || "").trim();
+  const y = (b || "").trim();
+  if (!x) return y || null;
+  if (!y) return x || null;
+  // Prefer the value that includes street-like tokens / is longer
+  const score = (s: string) => {
+    let n = s.length;
+    if (/\d/.test(s)) n += 20;
+    if (/ulic|námest|tried|cest|alej|nábrež|štefán|štefan/i.test(s)) n += 15;
+    return n;
+  };
+  return score(y) >= score(x) ? y : x;
 }
 
 function normalizePhone(raw: string): string {
@@ -377,21 +409,71 @@ function heuristicParse(text: string, empty: QuickInputResult): QuickInputResult
   }
 
   const addrMatch = text.match(
-    /(?:adresa|mont[aá][zž]\s+na|na adrese|v\s+(?:meste\s+)?)[:\s]+([^,.]+)/i
+    /(?:adresa|mont[aá][zž]\s+na|na adrese)[:\s]+([^,.]+(?:,[^.]+)?)/i
   );
   if (addrMatch) result.siteAddress = addrMatch[1].trim();
-  const city = text.match(
-    /(Trenčín|Bratislava|Žilina|Nitra|Trnava|Piešťany|Prievidza|Považská Bystrica)[^,]*/i
+
+  // "Trenčín na Štefánikovej 7" / "na Štefánikovej 7 v Trenčíne" / "Štefánikova 7, Trenčín"
+  const cityThenStreet = text.match(
+    /(Trenčín|Bratislava|Žilina|Nitra|Trnava|Piešťany|Prievidza|Považská Bystrica)\s+na\s+([A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž][A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž\-]+)\s+(\d+[\/A-Za-z]?)/i
   );
-  if (city) {
-    result.siteAddress = result.siteAddress
-      ? `${result.siteAddress}, ${city[0].trim()}`
-      : city[0].trim();
-    // Prefer clean city if address is just "rodinnom dome v Trenčíne" noise
-    if (/rodinn|dome|byt/.test((result.siteAddress || "").toLowerCase())) {
-      result.siteAddress = city[0].trim();
+  const streetThenCity = text.match(
+    /na\s+([A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž][A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž\-]+)\s+(\d+[\/A-Za-z]?)\s+v\s+(Trenčíne|Bratislave|Žiline|Nitre|Trnave|Piešťanoch|Prievidzi)/i
+  );
+  const streetCommaCity = text.match(
+    /([A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž][A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž\-]+)\s+(\d+[\/A-Za-z]?)\s*,\s*(Trenčín|Bratislava|Žilina|Nitra|Trnava|Piešťany|Prievidza)/i
+  );
+
+  if (cityThenStreet) {
+    result.siteAddress = `${improveStreetCase(cityThenStreet[2])} ${cityThenStreet[3]}, ${normalizeCityName(cityThenStreet[1])}`;
+  } else if (streetThenCity) {
+    result.siteAddress = `${improveStreetCase(streetThenCity[1])} ${streetThenCity[2]}, ${normalizeCityName(streetThenCity[3])}`;
+  } else if (streetCommaCity) {
+    result.siteAddress = `${improveStreetCase(streetCommaCity[1])} ${streetCommaCity[2]}, ${normalizeCityName(streetCommaCity[3])}`;
+  } else {
+    const city = text.match(
+      /(Trenčín|Bratislava|Žilina|Nitra|Trnava|Piešťany|Prievidza|Považská Bystrica)/i
+    );
+    if (city && !result.siteAddress) {
+      result.siteAddress = normalizeCityName(city[1]);
+    } else if (city && result.siteAddress) {
+      const current = result.siteAddress;
+      if (!new RegExp(city[1].slice(0, 5), "i").test(current)) {
+        result.siteAddress = `${current}, ${normalizeCityName(city[1])}`;
+      }
+      if (/rodinn|dome|byt/.test(current.toLowerCase()) && !/\d/.test(current)) {
+        result.siteAddress = normalizeCityName(city[1]);
+      }
     }
   }
 
   return result;
+}
+
+function normalizeCityName(raw: string): string {
+  const map: Record<string, string> = {
+    trenčíne: "Trenčín",
+    trencine: "Trenčín",
+    trenčín: "Trenčín",
+    bratislave: "Bratislava",
+    žiline: "Žilina",
+    ziline: "Žilina",
+    nitre: "Nitra",
+    trnave: "Trnava",
+    piešťanoch: "Piešťany",
+    piestanoch: "Piešťany",
+    prievidzi: "Prievidza",
+  };
+  const key = raw.toLowerCase();
+  if (map[key]) return map[key];
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+/** Speech often uses genitive (Štefánikovej) — normalize to common address form */
+function improveStreetCase(raw: string): string {
+  let s = raw.trim();
+  if (s.toLowerCase().endsWith("ovej")) {
+    s = `${s.slice(0, -4)}ova`;
+  }
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }

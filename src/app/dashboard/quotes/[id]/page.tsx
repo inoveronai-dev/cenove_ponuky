@@ -7,7 +7,6 @@ import {
   propertyTypeLabel,
 } from "@/lib/brand";
 import { getQuoteById, getQuoteViews } from "@/lib/quotes/data";
-import { publicQuoteUrl } from "@/lib/quotes/public-id";
 import {
   formatCurrency,
   formatDateSk,
@@ -88,7 +87,7 @@ export default async function QuoteDetailPage({
               className="underline"
               target="_blank"
             >
-              {publicQuoteUrl(quote.public_id)}
+              /ponuka/{quote.public_id}
             </Link>
           </p>
         </div>

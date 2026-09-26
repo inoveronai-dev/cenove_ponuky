@@ -29,4 +29,16 @@ describe("parseQuickInput heuristics (no OpenAI)", () => {
     expect(result.sieteProtiHmyzu).toBe(true);
     expect(result.installDate).toBe("2026-10-15");
   });
+
+  it("keeps street + number for Trenčín na štefánikovej 7", async () => {
+    const prev = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    const result = await parseQuickInput(
+      "Rodinný dom Trenčín na štefánikovej 7, 3 plastové okná"
+    );
+    process.env.OPENAI_API_KEY = prev;
+    expect(result.siteAddress?.toLowerCase()).toContain("štefánikova");
+    expect(result.siteAddress).toMatch(/7/);
+    expect(result.siteAddress?.toLowerCase()).toContain("trenčín");
+  });
 });
