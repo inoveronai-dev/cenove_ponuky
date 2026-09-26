@@ -100,6 +100,10 @@ export const quickInputSchema = z.object({
   installDate: z.string().nullable(),
   notes: z.string().nullable(),
   customerName: z.string().nullable().optional(),
+  customerFirstName: z.string().nullable().optional(),
+  customerLastName: z.string().nullable().optional(),
+  customerPhone: z.string().nullable().optional(),
+  customerEmail: z.string().nullable().optional(),
   category: z.enum(categoryValues).nullable().optional(),
   widthMm: z.number().nullable().optional(),
   heightMm: z.number().nullable().optional(),
@@ -108,6 +112,25 @@ export const quickInputSchema = z.object({
   glazing: z.enum(glazingValues).nullable().optional(),
   montaz: z.boolean().nullable().optional(),
   demontazStarych: z.boolean().nullable().optional(),
+  likvidacia: z.boolean().nullable().optional(),
+  parapetVnutorny: z.boolean().nullable().optional(),
+  parapetVonkajsi: z.boolean().nullable().optional(),
+  sieteProtiHmyzu: z.boolean().nullable().optional(),
+  otherService: z.boolean().nullable().optional(),
+  lineItems: z
+    .array(
+      z.object({
+        category: z.enum(categoryValues).nullable().optional(),
+        widthMm: z.number().nullable().optional(),
+        heightMm: z.number().nullable().optional(),
+        count: z.number().nullable().optional(),
+        color: z.string().nullable().optional(),
+        glazing: z.enum(glazingValues).nullable().optional(),
+        notes: z.string().nullable().optional(),
+      })
+    )
+    .nullable()
+    .optional(),
 });
 
 export type QuickInputResult = z.infer<typeof quickInputSchema>;

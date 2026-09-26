@@ -144,6 +144,19 @@ function applyQuickParse(
   prev: QuoteFormValues,
   d: QuickInputResult
 ): QuoteFormValues {
+  const first =
+    d.customerFirstName?.trim() ||
+    (d.customerName ? d.customerName.trim().split(/\s+/)[0] : null);
+  const last =
+    d.customerLastName?.trim() ||
+    (d.customerName
+      ? d.customerName.trim().split(/\s+/).slice(1).join(" ")
+      : null);
+  const fullName =
+    d.customerName?.trim() ||
+    [first, last].filter(Boolean).join(" ").trim() ||
+    prev.customerName;
+
   const next: QuoteFormValues = {
     ...prev,
     siteAddress: d.siteAddress ?? prev.siteAddress,
@@ -152,32 +165,70 @@ function applyQuickParse(
     floor: d.floor ?? prev.floor,
     installDate: d.installDate ?? prev.installDate,
     customerNotes: d.notes ?? prev.customerNotes,
-    customerName: d.customerName ?? prev.customerName,
+    customerName: fullName || prev.customerName,
+    customerFirstName: first || prev.customerFirstName,
+    customerLastName: last || prev.customerLastName,
+    customerPhone: d.customerPhone ?? prev.customerPhone,
+    customerEmail: d.customerEmail ?? prev.customerEmail,
     montaz: d.montaz ?? prev.montaz,
     demontazStarych: d.demontazStarych ?? prev.demontazStarych,
+    likvidacia: d.likvidacia ?? prev.likvidacia,
+    parapetVnutorny: d.parapetVnutorny ?? prev.parapetVnutorny,
+    parapetVonkajsi: d.parapetVonkajsi ?? prev.parapetVonkajsi,
+    sieteProtiHmyzu: d.sieteProtiHmyzu ?? prev.sieteProtiHmyzu,
+    otherService: d.otherService ?? prev.otherService,
   };
 
-  const hasDims =
-    d.category != null || (d.widthMm != null && d.heightMm != null);
-  if (hasDims) {
-    const item: QuoteLineItemValues = {
+  const parsedItems =
+    d.lineItems?.filter(
+      (item) =>
+        item &&
+        (item.category != null ||
+          (item.widthMm != null && item.heightMm != null) ||
+          item.count != null)
+    ) ?? [];
+
+  const fallbackItem =
+    d.category != null ||
+    (d.widthMm != null && d.heightMm != null) ||
+    d.count != null
+      ? [
+          {
+            category: d.category,
+            widthMm: d.widthMm,
+            heightMm: d.heightMm,
+            count: d.count,
+            color: d.color,
+            glazing: d.glazing,
+            notes: null as string | null,
+          },
+        ]
+      : [];
+
+  const sourceItems = parsedItems.length > 0 ? parsedItems : fallbackItem;
+
+  if (sourceItems.length > 0) {
+    const mapped: QuoteLineItemValues[] = sourceItems.map((item) => ({
       id: newLineItemId(),
-      category: (d.category ||
+      category: (item.category ||
         "plastove_okna") as QuoteLineItemValues["category"],
-      widthMm: d.widthMm ?? 1200,
-      heightMm: d.heightMm ?? 1400,
-      count: d.count ?? 1,
-      color: d.color || "",
-      glazing: (d.glazing || null) as QuoteLineItemValues["glazing"],
-      notes: "",
-    };
+      widthMm: item.widthMm ?? 1200,
+      heightMm: item.heightMm ?? 1400,
+      count: Math.max(1, item.count ?? 1),
+      color: item.color || "",
+      glazing: (item.glazing || null) as QuoteLineItemValues["glazing"],
+      notes: item.notes || "",
+    }));
+
     const isPlaceholder =
       prev.lineItems.length === 1 &&
       prev.lineItems[0].widthMm === 1200 &&
       prev.lineItems[0].heightMm === 1400 &&
       prev.lineItems[0].count === 1 &&
-      !prev.lineItems[0].notes;
-    next.lineItems = isPlaceholder ? [item] : [...prev.lineItems, item];
+      !prev.lineItems[0].notes &&
+      !prev.lineItems[0].color;
+
+    next.lineItems = isPlaceholder ? mapped : [...prev.lineItems, ...mapped];
   }
 
   return next;
