@@ -18,7 +18,7 @@ Toto **nie je** PDF generátor. Výstupom je prémiová customer-facing webová 
 |--------|-------------|
 | Frontend | Next.js 15 App Router, TypeScript, Tailwind CSS |
 | Auth / DB | Supabase Auth + PostgreSQL + RLS |
-| AI | OpenAI (text + rýchle zadanie) s deterministickým fallbackom |
+| AI | OpenAI (text, rýchle zadanie, hlasový Whisper) s deterministickým fallbackom |
 | E-mail | Resend (voliteľné) |
 | Deploy | Vercel |
 

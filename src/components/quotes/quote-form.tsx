@@ -20,6 +20,7 @@ import {
 import type {
   QuoteFormValues,
   QuoteLineItemValues,
+  QuickInputResult,
 } from "@/lib/quotes/schemas";
 import { formatCurrency } from "@/lib/utils";
 import type { Quote } from "@/types/database";
@@ -29,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { VoiceQuickInput } from "@/components/quotes/voice-quick-input";
 
 function newLineItemId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -138,6 +140,49 @@ const SERVICE_FIELD_MAP: Record<
   otherService: "otherService",
 };
 
+function applyQuickParse(
+  prev: QuoteFormValues,
+  d: QuickInputResult
+): QuoteFormValues {
+  const next: QuoteFormValues = {
+    ...prev,
+    siteAddress: d.siteAddress ?? prev.siteAddress,
+    propertyType:
+      (d.propertyType as QuoteFormValues["propertyType"]) ?? prev.propertyType,
+    floor: d.floor ?? prev.floor,
+    installDate: d.installDate ?? prev.installDate,
+    customerNotes: d.notes ?? prev.customerNotes,
+    customerName: d.customerName ?? prev.customerName,
+    montaz: d.montaz ?? prev.montaz,
+    demontazStarych: d.demontazStarych ?? prev.demontazStarych,
+  };
+
+  const hasDims =
+    d.category != null || (d.widthMm != null && d.heightMm != null);
+  if (hasDims) {
+    const item: QuoteLineItemValues = {
+      id: newLineItemId(),
+      category: (d.category ||
+        "plastove_okna") as QuoteLineItemValues["category"],
+      widthMm: d.widthMm ?? 1200,
+      heightMm: d.heightMm ?? 1400,
+      count: d.count ?? 1,
+      color: d.color || "",
+      glazing: (d.glazing || null) as QuoteLineItemValues["glazing"],
+      notes: "",
+    };
+    const isPlaceholder =
+      prev.lineItems.length === 1 &&
+      prev.lineItems[0].widthMm === 1200 &&
+      prev.lineItems[0].heightMm === 1400 &&
+      prev.lineItems[0].count === 1 &&
+      !prev.lineItems[0].notes;
+    next.lineItems = isPlaceholder ? [item] : [...prev.lineItems, item];
+  }
+
+  return next;
+}
+
 export function QuoteForm({
   pricing,
   quote,
@@ -169,6 +214,26 @@ export function QuoteForm({
       ),
     [form, pricing]
   );
+
+  async function recognizeFromText(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      toast.error("Zadajte popis zákazky alebo nahrajte hlas.");
+      return;
+    }
+    setParsing(true);
+    try {
+      const result = await parseQuickInputAction(trimmed);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      setForm((prev) => applyQuickParse(prev, result.data!));
+      toast.success("Údaje boli rozpoznané — skontrolujte formulár.");
+    } finally {
+      setParsing(false);
+    }
+  }
 
   function set<K extends keyof QuoteFormValues>(
     key: K,
@@ -236,73 +301,31 @@ export function QuoteForm({
           </CardHeader>
           <CardContent className="space-y-3">
             <Textarea
-              placeholder="Napr. Rodinný dom Trenčín, 4× plastové okná 1200×1400 mm trojsklo, biela, demontáž starých + montáž. Termín 15.10."
+              placeholder="Napr. Rodinný dom Trenčín, 4× plastové okná 1200×1400 mm trojsklo, biela, demontáž starých + montáž. Termín 15.10. — alebo použite mikrofón."
               value={quickText}
               onChange={(e) => setQuickText(e.target.value)}
             />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={parsing}
-              onClick={async () => {
-                setParsing(true);
-                const result = await parseQuickInputAction(quickText);
-                setParsing(false);
-                if (result.error) {
-                  toast.error(result.error);
-                  return;
-                }
-                const d = result.data!;
-                setForm((prev) => {
-                  const next: QuoteFormValues = {
-                    ...prev,
-                    siteAddress: d.siteAddress ?? prev.siteAddress,
-                    propertyType:
-                      (d.propertyType as QuoteFormValues["propertyType"]) ??
-                      prev.propertyType,
-                    floor: d.floor ?? prev.floor,
-                    installDate: d.installDate ?? prev.installDate,
-                    customerNotes: d.notes ?? prev.customerNotes,
-                    customerName: d.customerName ?? prev.customerName,
-                    montaz: d.montaz ?? prev.montaz,
-                    demontazStarych:
-                      d.demontazStarych ?? prev.demontazStarych,
-                  };
-
-                  const hasDims =
-                    d.category != null ||
-                    (d.widthMm != null && d.heightMm != null);
-                  if (hasDims) {
-                    const item: QuoteLineItemValues = {
-                      id: newLineItemId(),
-                      category: (d.category ||
-                        "plastove_okna") as QuoteLineItemValues["category"],
-                      widthMm: d.widthMm ?? 1200,
-                      heightMm: d.heightMm ?? 1400,
-                      count: d.count ?? 1,
-                      color: d.color || "",
-                      glazing: (d.glazing ||
-                        null) as QuoteLineItemValues["glazing"],
-                      notes: "",
-                    };
-                    const isPlaceholder =
-                      prev.lineItems.length === 1 &&
-                      prev.lineItems[0].widthMm === 1200 &&
-                      prev.lineItems[0].heightMm === 1400 &&
-                      prev.lineItems[0].count === 1 &&
-                      !prev.lineItems[0].notes;
-                    next.lineItems = isPlaceholder
-                      ? [item]
-                      : [...prev.lineItems, item];
-                  }
-
-                  return next;
-                });
-                toast.success("Údaje boli rozpoznané — skontrolujte formulár.");
-              }}
-            >
-              {parsing ? "Rozpoznávam…" : "Rozpoznať údaje"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <VoiceQuickInput
+                disabled={parsing}
+                onTranscript={async (text) => {
+                  setQuickText(text);
+                  await recognizeFromText(text);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={parsing}
+                onClick={() => recognizeFromText(quickText)}
+              >
+                {parsing ? "Rozpoznávam…" : "Rozpoznať údaje"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Mikrofón prepíše reč (Whisper) a AI vyplní polia. Funguje aj na
+              Vercel — potrebuje OPENAI_API_KEY v Environment Variables.
+            </p>
           </CardContent>
         </Card>
 

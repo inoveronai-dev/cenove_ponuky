@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   // Avoid "Application error" when opening via 127.0.0.1 while the
   // dev server advertises localhost (or vice versa).
   allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.100.55"],
+  // Voice recordings for Whisper transcription
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
+  },
   images: {
     remotePatterns: [
       {
