@@ -1,10 +1,10 @@
-# MoveQuote
+# Cenové ponuky — TOP Okno Trenčín
 
-Inteligentné cenové ponuky pre sťahovacie firmy.
+Profesionálne webové cenové ponuky pre **okná, dvere, tienenie a garážové brány**.
 
-MoveQuote je produkčne pripravené MVP, ktoré umožňuje sťahovacím firmám:
+Aplikácia umožňuje firme TOP Okno Trenčín (a podobným firmám):
 
-1. **Vytvoriť** webovú cenovú ponuku za 20–60 sekúnd
+1. **Vytvoriť** webovú cenovú ponuku za 20–60 sekúnd (položky, rozmery, montáž)
 2. **Odoslať** zákazníkovi unikátny odkaz (`/ponuka/7K4X2P`)
 3. **Sledovať**, či a koľkokrát zákazník ponuku otvoril — vrátane e-mailovej notifikácie
 
@@ -52,7 +52,7 @@ npm run dev
 
 1. Otvorte [http://localhost:3000](http://localhost:3000)
 2. Kliknite **Vyskúšať demo**
-3. Máte firmu **Sťahovanie Bez Starostí** + ponuku **Ján Novák** (`/ponuka/7K4X2P`)
+3. Máte firmu **TOP Okno Trenčín s.r.o.** + ponuku **Ján Novák** (`/ponuka/7K4X2P`)
 4. Vytvárajte / upravujte ponuky, otvárajte verejný link, sledujte otvorenia
 
 Dáta sa ukladajú do lokálneho súboru `.data/demo-store.json` (nie do produkčnej DB).  
@@ -143,14 +143,17 @@ Default cooldown: **3 hodiny** (nastaviteľné v Nastaveniach). Refresh počíta
 ## Ako funguje výpočet ceny
 
 ```ts
-labor = hours × workers × hourlyRate
-transport = distanceKm × routeMultiplier × kmRate
-extras = sum(selected surcharges)
-base = labor + transport + extras + fixedFee (+ weekend/evening %)
+areaM2 = Σ (widthMm/1000 × heightMm/1000 × count)
+products = Σ (areaM2 × €/m² podľa kategórie)
+montaz = montaz ? totalAreaM2 × montazPerM2 : 0
+extras = demontáž×ks + likvidácia + parapety×ks + siete×ks + iné
+base = products + montaz + extras + fixedFee (zameranie)
 base = max(base, minimumJobPrice)
 priceMin = round10(base × bufferMin)
 priceMax = round10(base × bufferMax)
 ```
+
+Kategórie: plastové okná/dvere, hliník, interiérové dvere, tieniaca technika, garážové brány.
 
 Modul: `src/lib/pricing/calculateQuoteEstimate.ts`  
 Testy: `npm test`
@@ -171,8 +174,8 @@ Testy: `npm test`
 
 V Nastaveniach → **Načítať demo údaje**:
 
-- Firma: **Sťahovanie Bez Starostí**
-- Ponuka: **Ján Novák**, Bratislava – Ružinov → Trnava, 3-izbový byt, demontáž, atď.
+- Firma: **TOP Okno Trenčín s.r.o.** (Zlatovská 22, Trenčín)
+- Ponuka: **Ján Novák** — plastové okná + vchodové dvere + vonkajšie rolety, montáž a demontáž na adrese v Trenčíne
 
 ---
 

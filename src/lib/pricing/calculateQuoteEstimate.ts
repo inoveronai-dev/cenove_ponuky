@@ -1,47 +1,50 @@
+import type { ProductCategory } from "@/lib/brand";
+
 export type PricingSettingsInput = {
-  hourlyRatePerWorker: number;
-  kilometerRate: number;
-  routeMultiplier: number;
+  pricePerM2PlastoveOkna: number;
+  pricePerM2PlastoveDvere: number;
+  pricePerM2Hlinik: number;
+  pricePerM2InterieroveDvere: number;
+  pricePerM2Tieniaca: number;
+  pricePerM2GarazoveBrany: number;
   fixedFee: number;
-  disassemblySurcharge: number;
-  assemblySurcharge: number;
-  packingSurcharge: number;
-  packingMaterialSurcharge: number;
-  heavyItemsSurcharge: number;
-  disposalSurcharge: number;
-  protectiveWrappingSurcharge: number;
+  montazPerM2: number;
+  demontazPerUnit: number;
+  likvidaciaFee: number;
+  parapetVnutornyFee: number;
+  parapetVonkajsiFee: number;
+  sieteFee: number;
   otherSurcharge: number;
   minimumJobPrice: number;
-  weekendSurchargePercent: number;
-  eveningSurchargePercent: number;
   bufferMinMultiplier: number;
   bufferMaxMultiplier: number;
 };
 
+export type QuoteLineItemInput = {
+  category: ProductCategory | string;
+  widthMm: number;
+  heightMm: number;
+  count: number;
+};
+
 export type QuoteEstimateInput = {
-  estimatedHours: number;
-  workers: number;
-  distanceKm: number;
-  disassembly?: boolean;
-  assembly?: boolean;
-  packing?: boolean;
-  packingMaterial?: boolean;
-  heavyItems?: boolean;
-  disposal?: boolean;
-  protectiveWrapping?: boolean;
+  items: QuoteLineItemInput[];
+  montaz?: boolean;
+  demontazStarych?: boolean;
+  likvidacia?: boolean;
+  parapetVnutorny?: boolean;
+  parapetVonkajsi?: boolean;
+  sieteProtiHmyzu?: boolean;
   otherService?: boolean;
-  isWeekend?: boolean;
-  isEvening?: boolean;
 };
 
 export type QuoteEstimateResult = {
-  laborCost: number;
-  transportCost: number;
+  productsCost: number;
+  montazCost: number;
   extrasCost: number;
   fixedFee: number;
-  subtotalBeforeSurcharges: number;
-  weekendSurcharge: number;
-  eveningSurcharge: number;
+  totalAreaM2: number;
+  totalUnits: number;
   baseEstimate: number;
   priceMin: number;
   priceMax: number;
@@ -51,39 +54,64 @@ export function roundToNearest10(value: number): number {
   return Math.round(value / 10) * 10;
 }
 
+export function areaM2(widthMm: number, heightMm: number, count: number): number {
+  const w = Math.max(0, Number(widthMm) || 0) / 1000;
+  const h = Math.max(0, Number(heightMm) || 0) / 1000;
+  const n = Math.max(0, Number(count) || 0);
+  return w * h * n;
+}
+
+function rateForCategory(
+  category: string,
+  pricing: PricingSettingsInput
+): number {
+  switch (category) {
+    case "plastove_okna":
+      return pricing.pricePerM2PlastoveOkna;
+    case "plastove_dvere":
+      return pricing.pricePerM2PlastoveDvere;
+    case "hlinikove_systemy":
+      return pricing.pricePerM2Hlinik;
+    case "interierove_dvere":
+      return pricing.pricePerM2InterieroveDvere;
+    case "tieniaca_technika":
+      return pricing.pricePerM2Tieniaca;
+    case "garazove_brany":
+      return pricing.pricePerM2GarazoveBrany;
+    default:
+      return pricing.pricePerM2PlastoveOkna;
+  }
+}
+
 export function calculateQuoteEstimate(
   input: QuoteEstimateInput,
   pricing: PricingSettingsInput
 ): QuoteEstimateResult {
-  const hours = Math.max(0, Number(input.estimatedHours) || 0);
-  const workers = Math.max(0, Number(input.workers) || 0);
-  const distance = Math.max(0, Number(input.distanceKm) || 0);
-  const routeMultiplier = pricing.routeMultiplier > 0 ? pricing.routeMultiplier : 1;
+  const items = input.items || [];
+  let productsCost = 0;
+  let totalAreaM2 = 0;
+  let totalUnits = 0;
 
-  const laborCost = hours * workers * pricing.hourlyRatePerWorker;
-  const transportCost = distance * routeMultiplier * pricing.kilometerRate;
+  for (const item of items) {
+    const area = areaM2(item.widthMm, item.heightMm, item.count);
+    const units = Math.max(0, Number(item.count) || 0);
+    totalAreaM2 += area;
+    totalUnits += units;
+    productsCost += area * rateForCategory(item.category, pricing);
+  }
+
+  const montazCost = input.montaz ? totalAreaM2 * pricing.montazPerM2 : 0;
 
   let extrasCost = 0;
-  if (input.disassembly) extrasCost += pricing.disassemblySurcharge;
-  if (input.assembly) extrasCost += pricing.assemblySurcharge;
-  if (input.packing) extrasCost += pricing.packingSurcharge;
-  if (input.packingMaterial) extrasCost += pricing.packingMaterialSurcharge;
-  if (input.heavyItems) extrasCost += pricing.heavyItemsSurcharge;
-  if (input.disposal) extrasCost += pricing.disposalSurcharge;
-  if (input.protectiveWrapping) extrasCost += pricing.protectiveWrappingSurcharge;
+  if (input.demontazStarych) extrasCost += totalUnits * pricing.demontazPerUnit;
+  if (input.likvidacia) extrasCost += pricing.likvidaciaFee;
+  if (input.parapetVnutorny) extrasCost += totalUnits * pricing.parapetVnutornyFee;
+  if (input.parapetVonkajsi) extrasCost += totalUnits * pricing.parapetVonkajsiFee;
+  if (input.sieteProtiHmyzu) extrasCost += totalUnits * pricing.sieteFee;
   if (input.otherService) extrasCost += pricing.otherSurcharge;
 
   const fixedFee = pricing.fixedFee;
-  const subtotalBeforeSurcharges = laborCost + transportCost + extrasCost + fixedFee;
-
-  const weekendSurcharge = input.isWeekend
-    ? subtotalBeforeSurcharges * (pricing.weekendSurchargePercent / 100)
-    : 0;
-  const eveningSurcharge = input.isEvening
-    ? subtotalBeforeSurcharges * (pricing.eveningSurchargePercent / 100)
-    : 0;
-
-  let baseEstimate = subtotalBeforeSurcharges + weekendSurcharge + eveningSurcharge;
+  let baseEstimate = productsCost + montazCost + extrasCost + fixedFee;
 
   if (pricing.minimumJobPrice > 0 && baseEstimate < pricing.minimumJobPrice) {
     baseEstimate = pricing.minimumJobPrice;
@@ -93,35 +121,35 @@ export function calculateQuoteEstimate(
   const priceMax = roundToNearest10(baseEstimate * pricing.bufferMaxMultiplier);
 
   return {
-    laborCost,
-    transportCost,
+    productsCost,
+    montazCost,
     extrasCost,
     fixedFee,
-    subtotalBeforeSurcharges,
-    weekendSurcharge,
-    eveningSurcharge,
+    totalAreaM2: Math.round(totalAreaM2 * 100) / 100,
+    totalUnits,
     baseEstimate,
     priceMin: Math.min(priceMin, priceMax),
     priceMax: Math.max(priceMin, priceMax),
   };
 }
 
+/** Orientational defaults (€/m² and fees) for demo — adjustable in settings */
 export const DEFAULT_PRICING: PricingSettingsInput = {
-  hourlyRatePerWorker: 38,
-  kilometerRate: 0.65,
-  routeMultiplier: 1,
-  fixedFee: 90,
-  disassemblySurcharge: 70,
-  assemblySurcharge: 70,
-  packingSurcharge: 80,
-  packingMaterialSurcharge: 40,
-  heavyItemsSurcharge: 60,
-  disposalSurcharge: 50,
-  protectiveWrappingSurcharge: 45,
+  pricePerM2PlastoveOkna: 280,
+  pricePerM2PlastoveDvere: 320,
+  pricePerM2Hlinik: 420,
+  pricePerM2InterieroveDvere: 180,
+  pricePerM2Tieniaca: 120,
+  pricePerM2GarazoveBrany: 200,
+  fixedFee: 80,
+  montazPerM2: 45,
+  demontazPerUnit: 35,
+  likvidaciaFee: 60,
+  parapetVnutornyFee: 25,
+  parapetVonkajsiFee: 35,
+  sieteFee: 40,
   otherSurcharge: 0,
   minimumJobPrice: 0,
-  weekendSurchargePercent: 0,
-  eveningSurchargePercent: 0,
   bufferMinMultiplier: 0.92,
   bufferMaxMultiplier: 1.12,
 };

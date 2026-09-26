@@ -8,15 +8,19 @@ import {
   updateQuoteAction,
 } from "@/app/actions/quotes";
 import {
-  ADDITIONAL_SERVICES,
+  GLAZING_OPTIONS,
+  INSTALL_SERVICES,
+  PRODUCT_CATEGORIES,
   PROPERTY_TYPES,
-  VEHICLE_TYPES,
 } from "@/lib/brand";
 import {
   calculateQuoteEstimate,
   type PricingSettingsInput,
 } from "@/lib/pricing/calculateQuoteEstimate";
-import type { QuoteFormValues } from "@/lib/quotes/schemas";
+import type {
+  QuoteFormValues,
+  QuoteLineItemValues,
+} from "@/lib/quotes/schemas";
 import { formatCurrency } from "@/lib/utils";
 import type { Quote } from "@/types/database";
 import { Button } from "@/components/ui/button";
@@ -26,50 +30,72 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-function quoteToForm(quote?: Quote | null): QuoteFormValues {
-  if (!quote) {
-    return {
-      customerFirstName: "",
-      customerLastName: "",
-      customerName: "",
-      customerEmail: "",
-      customerPhone: "",
-      originAddress: "",
-      destinationAddress: "",
-      originPropertyType: null,
-      originFloor: null,
-      originElevator: null,
-      destinationFloor: null,
-      destinationElevator: null,
-      distanceKm: null,
-      boxCount: null,
-      largeItems: "",
-      wardrobesCount: null,
-      bedsCount: null,
-      sofasCount: null,
-      appliancesCount: null,
-      disassembly: false,
-      assembly: false,
-      packing: false,
-      packingMaterial: false,
-      disposal: false,
-      heavyItems: false,
-      protectiveWrapping: false,
-      otherService: false,
-      moveDate: "",
-      estimatedHours: 4,
-      workers: 2,
-      vehicleType: "",
-      isWeekend: false,
-      isEvening: false,
-      internalNotes: "",
-      customerNotes: "",
-      saveAsDraft: false,
-      priceIsManual: false,
-      priceMin: null,
-      priceMax: null,
-    };
+function newLineItemId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
   }
+  return `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function createDefaultLineItem(): QuoteLineItemValues {
+  return {
+    id: newLineItemId(),
+    category: "plastove_okna",
+    widthMm: 1200,
+    heightMm: 1400,
+    count: 1,
+    color: "",
+    glazing: "trojsklo",
+    notes: "",
+  };
+}
+
+function emptyForm(): QuoteFormValues {
+  return {
+    customerFirstName: "",
+    customerLastName: "",
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    siteAddress: "",
+    propertyType: null,
+    floor: null,
+    installDate: "",
+    lineItems: [createDefaultLineItem()],
+    montaz: true,
+    demontazStarych: false,
+    likvidacia: false,
+    parapetVnutorny: false,
+    parapetVonkajsi: false,
+    sieteProtiHmyzu: false,
+    otherService: false,
+    internalNotes: "",
+    customerNotes: "",
+    saveAsDraft: false,
+    priceIsManual: false,
+    priceMin: null,
+    priceMax: null,
+  };
+}
+
+function quoteToForm(quote?: Quote | null): QuoteFormValues {
+  if (!quote) return emptyForm();
+
+  const lineItems =
+    Array.isArray(quote.line_items) && quote.line_items.length > 0
+      ? quote.line_items.map((item) => ({
+          id: item.id || newLineItemId(),
+          category: (item.category ||
+            "plastove_okna") as QuoteLineItemValues["category"],
+          widthMm: Number(item.widthMm) || 0,
+          heightMm: Number(item.heightMm) || 0,
+          count: Math.max(1, Number(item.count) || 1),
+          color: item.color || "",
+          glazing: (item.glazing ||
+            null) as QuoteLineItemValues["glazing"],
+          notes: item.notes || "",
+        }))
+      : [createDefaultLineItem()];
 
   return {
     customerFirstName: quote.customer_first_name || "",
@@ -77,34 +103,19 @@ function quoteToForm(quote?: Quote | null): QuoteFormValues {
     customerName: quote.customer_name || "",
     customerEmail: quote.customer_email || "",
     customerPhone: quote.customer_phone || "",
-    originAddress: quote.origin_address || "",
-    destinationAddress: quote.destination_address || "",
-    originPropertyType: quote.origin_property_type as QuoteFormValues["originPropertyType"],
-    originFloor: quote.origin_floor,
-    originElevator: quote.origin_elevator,
-    destinationFloor: quote.destination_floor,
-    destinationElevator: quote.destination_elevator,
-    distanceKm: quote.distance_km,
-    boxCount: quote.box_count,
-    largeItems: quote.large_items || "",
-    wardrobesCount: quote.wardrobes_count,
-    bedsCount: quote.beds_count,
-    sofasCount: quote.sofas_count,
-    appliancesCount: quote.appliances_count,
-    disassembly: quote.disassembly,
-    assembly: quote.assembly,
-    packing: quote.packing,
-    packingMaterial: quote.packing_material,
-    disposal: quote.disposal,
-    heavyItems: quote.heavy_items,
-    protectiveWrapping: quote.protective_wrapping,
-    otherService: quote.other_service,
-    moveDate: quote.move_date || "",
-    estimatedHours: quote.estimated_hours,
-    workers: quote.workers,
-    vehicleType: quote.vehicle_type || "",
-    isWeekend: quote.is_weekend,
-    isEvening: quote.is_evening,
+    siteAddress: quote.site_address || "",
+    propertyType:
+      (quote.property_type as QuoteFormValues["propertyType"]) || null,
+    floor: quote.floor,
+    installDate: quote.install_date || "",
+    lineItems,
+    montaz: Boolean(quote.montaz),
+    demontazStarych: Boolean(quote.demontaz_starych),
+    likvidacia: Boolean(quote.likvidacia),
+    parapetVnutorny: Boolean(quote.parapet_vnutorny),
+    parapetVonkajsi: Boolean(quote.parapet_vonkajsi),
+    sieteProtiHmyzu: Boolean(quote.siete_proti_hmyzu),
+    otherService: Boolean(quote.other_service),
     internalNotes: quote.internal_notes || "",
     customerNotes: quote.customer_notes || "",
     saveAsDraft: quote.status === "draft",
@@ -113,6 +124,19 @@ function quoteToForm(quote?: Quote | null): QuoteFormValues {
     priceMax: quote.price_max,
   };
 }
+
+const SERVICE_FIELD_MAP: Record<
+  (typeof INSTALL_SERVICES)[number]["key"],
+  keyof QuoteFormValues
+> = {
+  montaz: "montaz",
+  demontazStarych: "demontazStarych",
+  likvidacia: "likvidacia",
+  parapetVnutorny: "parapetVnutorny",
+  parapetVonkajsi: "parapetVonkajsi",
+  sieteProtiHmyzu: "sieteProtiHmyzu",
+  otherService: "otherService",
+};
 
 export function QuoteForm({
   pricing,
@@ -132,26 +156,24 @@ export function QuoteForm({
     () =>
       calculateQuoteEstimate(
         {
-          estimatedHours: Number(form.estimatedHours) || 0,
-          workers: Number(form.workers) || 0,
-          distanceKm: Number(form.distanceKm) || 0,
-          disassembly: form.disassembly,
-          assembly: form.assembly,
-          packing: form.packing,
-          packingMaterial: form.packingMaterial,
-          heavyItems: form.heavyItems,
-          disposal: form.disposal,
-          protectiveWrapping: form.protectiveWrapping,
+          items: form.lineItems,
+          montaz: form.montaz,
+          demontazStarych: form.demontazStarych,
+          likvidacia: form.likvidacia,
+          parapetVnutorny: form.parapetVnutorny,
+          parapetVonkajsi: form.parapetVonkajsi,
+          sieteProtiHmyzu: form.sieteProtiHmyzu,
           otherService: form.otherService,
-          isWeekend: form.isWeekend,
-          isEvening: form.isEvening,
         },
         pricing
       ),
     [form, pricing]
   );
 
-  function set<K extends keyof QuoteFormValues>(key: K, value: QuoteFormValues[K]) {
+  function set<K extends keyof QuoteFormValues>(
+    key: K,
+    value: QuoteFormValues[K]
+  ) {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
       if (key === "customerFirstName" || key === "customerLastName") {
@@ -162,6 +184,35 @@ export function QuoteForm({
       }
       return next;
     });
+  }
+
+  function updateLineItem(
+    id: string,
+    patch: Partial<QuoteLineItemValues>
+  ) {
+    setForm((prev) => ({
+      ...prev,
+      lineItems: prev.lineItems.map((item) =>
+        item.id === id ? { ...item, ...patch } : item
+      ),
+    }));
+  }
+
+  function addLineItem() {
+    setForm((prev) => ({
+      ...prev,
+      lineItems: [...prev.lineItems, createDefaultLineItem()],
+    }));
+  }
+
+  function removeLineItem(id: string) {
+    setForm((prev) => ({
+      ...prev,
+      lineItems:
+        prev.lineItems.length <= 1
+          ? prev.lineItems
+          : prev.lineItems.filter((item) => item.id !== id),
+    }));
   }
 
   const showVersionWarning =
@@ -185,7 +236,7 @@ export function QuoteForm({
           </CardHeader>
           <CardContent className="space-y-3">
             <Textarea
-              placeholder="Napr. 3 izbák Ružinov do Trnavy, 4. poschodie s výťahom, približne 35 krabíc, gauč, posteľ, práčka a dve skrine. Skrine treba rozobrať. Termín 28.9."
+              placeholder="Napr. Rodinný dom Trenčín, 4× plastové okná 1200×1400 mm trojsklo, biela, demontáž starých + montáž. Termín 15.10."
               value={quickText}
               onChange={(e) => setQuickText(e.target.value)}
             />
@@ -202,28 +253,51 @@ export function QuoteForm({
                   return;
                 }
                 const d = result.data!;
-                setForm((prev) => ({
-                  ...prev,
-                  originAddress: d.originAddress ?? prev.originAddress,
-                  destinationAddress:
-                    d.destinationAddress ?? prev.destinationAddress,
-                  originPropertyType:
-                    (d.propertyType as QuoteFormValues["originPropertyType"]) ??
-                    prev.originPropertyType,
-                  originFloor: d.floor ?? prev.originFloor,
-                  originElevator: d.elevator ?? prev.originElevator,
-                  boxCount: d.boxCount ?? prev.boxCount,
-                  largeItems: d.largeItems ?? prev.largeItems,
-                  disassembly: d.disassembly ?? prev.disassembly,
-                  assembly: d.assembly ?? prev.assembly,
-                  packing: d.packing ?? prev.packing,
-                  moveDate: d.moveDate ?? prev.moveDate,
-                  customerNotes: d.notes ?? prev.customerNotes,
-                  estimatedHours: d.estimatedHours ?? prev.estimatedHours,
-                  workers: d.workers ?? prev.workers,
-                  distanceKm: d.distanceKm ?? prev.distanceKm,
-                  customerName: d.customerName ?? prev.customerName,
-                }));
+                setForm((prev) => {
+                  const next: QuoteFormValues = {
+                    ...prev,
+                    siteAddress: d.siteAddress ?? prev.siteAddress,
+                    propertyType:
+                      (d.propertyType as QuoteFormValues["propertyType"]) ??
+                      prev.propertyType,
+                    floor: d.floor ?? prev.floor,
+                    installDate: d.installDate ?? prev.installDate,
+                    customerNotes: d.notes ?? prev.customerNotes,
+                    customerName: d.customerName ?? prev.customerName,
+                    montaz: d.montaz ?? prev.montaz,
+                    demontazStarych:
+                      d.demontazStarych ?? prev.demontazStarych,
+                  };
+
+                  const hasDims =
+                    d.category != null ||
+                    (d.widthMm != null && d.heightMm != null);
+                  if (hasDims) {
+                    const item: QuoteLineItemValues = {
+                      id: newLineItemId(),
+                      category: (d.category ||
+                        "plastove_okna") as QuoteLineItemValues["category"],
+                      widthMm: d.widthMm ?? 1200,
+                      heightMm: d.heightMm ?? 1400,
+                      count: d.count ?? 1,
+                      color: d.color || "",
+                      glazing: (d.glazing ||
+                        null) as QuoteLineItemValues["glazing"],
+                      notes: "",
+                    };
+                    const isPlaceholder =
+                      prev.lineItems.length === 1 &&
+                      prev.lineItems[0].widthMm === 1200 &&
+                      prev.lineItems[0].heightMm === 1400 &&
+                      prev.lineItems[0].count === 1 &&
+                      !prev.lineItems[0].notes;
+                    next.lineItems = isPlaceholder
+                      ? [item]
+                      : [...prev.lineItems, item];
+                  }
+
+                  return next;
+                });
                 toast.success("Údaje boli rozpoznané — skontrolujte formulár.");
               }}
             >
@@ -271,32 +345,27 @@ export function QuoteForm({
 
         <Card>
           <CardHeader>
-            <CardTitle>Trasa sťahovania</CardTitle>
+            <CardTitle>Miesto montáže</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-1">
-              <Label>Odkiaľ</Label>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Adresa montáže</Label>
               <Input
-                value={form.originAddress || ""}
-                onChange={(e) => set("originAddress", e.target.value)}
+                placeholder="Ulica, mesto"
+                value={form.siteAddress || ""}
+                onChange={(e) => set("siteAddress", e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label>Kam</Label>
-              <Input
-                value={form.destinationAddress || ""}
-                onChange={(e) => set("destinationAddress", e.target.value)}
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Typ priestoru (odkiaľ)</Label>
+              <Label>Typ objektu</Label>
               <select
                 className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
-                value={form.originPropertyType || ""}
+                value={form.propertyType || ""}
                 onChange={(e) =>
                   set(
-                    "originPropertyType",
-                    (e.target.value || null) as QuoteFormValues["originPropertyType"]
+                    "propertyType",
+                    (e.target.value ||
+                      null) as QuoteFormValues["propertyType"]
                   )
                 }
               >
@@ -309,186 +378,205 @@ export function QuoteForm({
               </select>
             </div>
             <div className="space-y-2">
-              <Label>Poschodie (odkiaľ)</Label>
+              <Label>Poschodie</Label>
               <Input
                 type="number"
-                value={form.originFloor ?? ""}
+                value={form.floor ?? ""}
                 onChange={(e) =>
                   set(
-                    "originFloor",
+                    "floor",
                     e.target.value === "" ? null : Number(e.target.value)
                   )
                 }
               />
             </div>
-            <div className="space-y-2">
-              <Label>Výťah (odkiaľ)</Label>
-              <select
-                className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
-                value={
-                  form.originElevator == null
-                    ? ""
-                    : form.originElevator
-                      ? "yes"
-                      : "no"
-                }
-                onChange={(e) =>
-                  set(
-                    "originElevator",
-                    e.target.value === ""
-                      ? null
-                      : e.target.value === "yes"
-                  )
-                }
-              >
-                <option value="">—</option>
-                <option value="yes">Áno</option>
-                <option value="no">Nie</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Poschodie (kam)</Label>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Predpokladaný dátum montáže</Label>
               <Input
-                type="number"
-                value={form.destinationFloor ?? ""}
-                onChange={(e) =>
-                  set(
-                    "destinationFloor",
-                    e.target.value === "" ? null : Number(e.target.value)
-                  )
-                }
+                type="date"
+                value={form.installDate || ""}
+                onChange={(e) => set("installDate", e.target.value)}
               />
-            </div>
-            <div className="space-y-2">
-              <Label>Výťah (kam)</Label>
-              <select
-                className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
-                value={
-                  form.destinationElevator == null
-                    ? ""
-                    : form.destinationElevator
-                      ? "yes"
-                      : "no"
-                }
-                onChange={(e) =>
-                  set(
-                    "destinationElevator",
-                    e.target.value === ""
-                      ? null
-                      : e.target.value === "yes"
-                  )
-                }
-              >
-                <option value="">—</option>
-                <option value="yes">Áno</option>
-                <option value="no">Nie</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Vzdialenosť (km)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={form.distanceKm ?? ""}
-                onChange={(e) =>
-                  set(
-                    "distanceKm",
-                    e.target.value === "" ? null : Number(e.target.value)
-                  )
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                Pripravené na neskoršie automatické počítanie cez mapy.
-              </p>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Čo sťahujeme</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+            <CardTitle>Položky ponuky</CardTitle>
+            <Button type="button" variant="outline" size="sm" onClick={addLineItem}>
+              Pridať položku
+            </Button>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Približný počet krabíc</Label>
-                <Input
-                  type="number"
-                  value={form.boxCount ?? ""}
-                  onChange={(e) =>
-                    set(
-                      "boxCount",
-                      e.target.value === "" ? null : Number(e.target.value)
-                    )
-                  }
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Veľký nábytok / položky</Label>
-              <Textarea
-                placeholder="sedačka, posteľ, práčka, chladnička, 2 skrine"
-                value={form.largeItems || ""}
-                onChange={(e) => set("largeItems", e.target.value)}
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-4">
-              {(
-                [
-                  ["wardrobesCount", "Skrine"],
-                  ["bedsCount", "Postele"],
-                  ["sofasCount", "Sedačky"],
-                  ["appliancesCount", "Spotrebiče"],
-                ] as const
-              ).map(([key, label]) => (
-                <div key={key} className="space-y-2">
-                  <Label>{label}</Label>
-                  <Input
-                    type="number"
-                    value={form[key] ?? ""}
-                    onChange={(e) =>
-                      set(
-                        key,
-                        e.target.value === "" ? null : Number(e.target.value)
-                      )
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {ADDITIONAL_SERVICES.map((service) => {
-                const keyMap: Record<string, keyof QuoteFormValues> = {
-                  disassembly: "disassembly",
-                  assembly: "assembly",
-                  packing: "packing",
-                  packing_material: "packingMaterial",
-                  disposal: "disposal",
-                  heavy_items: "heavyItems",
-                  protective_wrapping: "protectiveWrapping",
-                  other: "otherService",
-                };
-                const field = keyMap[service.key];
-                return (
-                  <label
-                    key={service.key}
-                    className="flex items-center gap-3 rounded-lg border border-border px-3 py-2"
+            {form.lineItems.map((item, index) => (
+              <div
+                key={item.id}
+                className="space-y-4 rounded-xl border border-border p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Položka {index + 1}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={form.lineItems.length <= 1}
+                    onClick={() => removeLineItem(item.id)}
                   >
-                    <Checkbox
-                      checked={Boolean(form[field])}
-                      onCheckedChange={(checked) =>
-                        set(field, Boolean(checked) as never)
+                    Odstrániť
+                  </Button>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Kategória</Label>
+                    <select
+                      className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+                      value={item.category}
+                      onChange={(e) =>
+                        updateLineItem(item.id, {
+                          category:
+                            e.target.value as QuoteLineItemValues["category"],
+                        })
+                      }
+                    >
+                      {PRODUCT_CATEGORIES.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Šírka (mm)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={item.widthMm || ""}
+                      onChange={(e) =>
+                        updateLineItem(item.id, {
+                          widthMm:
+                            e.target.value === ""
+                              ? 0
+                              : Number(e.target.value),
+                        })
                       }
                     />
-                    <span className="text-sm">{service.label}</span>
-                  </label>
-                );
-              })}
-            </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Výška (mm)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={item.heightMm || ""}
+                      onChange={(e) =>
+                        updateLineItem(item.id, {
+                          heightMm:
+                            e.target.value === ""
+                              ? 0
+                              : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Počet ks</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={item.count || ""}
+                      onChange={(e) =>
+                        updateLineItem(item.id, {
+                          count: Math.max(
+                            1,
+                            e.target.value === ""
+                              ? 1
+                              : Number(e.target.value)
+                          ),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Farba</Label>
+                    <Input
+                      placeholder="napr. biela, antracit"
+                      value={item.color || ""}
+                      onChange={(e) =>
+                        updateLineItem(item.id, { color: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Zasklenie</Label>
+                    <select
+                      className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+                      value={item.glazing || ""}
+                      onChange={(e) =>
+                        updateLineItem(item.id, {
+                          glazing: (e.target.value ||
+                            null) as QuoteLineItemValues["glazing"],
+                        })
+                      }
+                    >
+                      <option value="">—</option>
+                      {GLAZING_OPTIONS.map((g) => (
+                        <option key={g.value} value={g.value}>
+                          {g.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Poznámka k položke</Label>
+                    <Input
+                      value={item.notes || ""}
+                      onChange={(e) =>
+                        updateLineItem(item.id, { notes: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Doplnkové služby</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            {INSTALL_SERVICES.map((service) => {
+              const field = SERVICE_FIELD_MAP[service.key];
+              return (
+                <label
+                  key={service.key}
+                  className="flex items-center gap-3 rounded-lg border border-border px-3 py-2"
+                >
+                  <Checkbox
+                    checked={Boolean(form[field])}
+                    onCheckedChange={(checked) =>
+                      set(field, Boolean(checked) as never)
+                    }
+                  />
+                  <span className="text-sm">{service.label}</span>
+                </label>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Poznámky</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Poznámka k zákazke</Label>
+              <Label>Poznámka pre zákazníka</Label>
               <Textarea
-                placeholder="Klient preferuje ranný začiatok. Parkovanie je približne 20 metrov od vchodu."
+                placeholder="Napr. termín montáže dohodneme po zameraní. Parkovanie pred domom."
                 value={form.customerNotes || ""}
                 onChange={(e) => set("customerNotes", e.target.value)}
               />
@@ -500,78 +588,6 @@ export function QuoteForm({
                 onChange={(e) => set("internalNotes", e.target.value)}
               />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Termín a parametre</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Predpokladaný dátum sťahovania</Label>
-              <Input
-                type="date"
-                value={form.moveDate || ""}
-                onChange={(e) => set("moveDate", e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Odhadovaný čas (hodiny)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                value={form.estimatedHours ?? ""}
-                onChange={(e) =>
-                  set(
-                    "estimatedHours",
-                    e.target.value === "" ? null : Number(e.target.value)
-                  )
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Počet pracovníkov</Label>
-              <Input
-                type="number"
-                value={form.workers ?? ""}
-                onChange={(e) =>
-                  set(
-                    "workers",
-                    e.target.value === "" ? null : Number(e.target.value)
-                  )
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Typ vozidla</Label>
-              <select
-                className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
-                value={form.vehicleType || ""}
-                onChange={(e) => set("vehicleType", e.target.value)}
-              >
-                <option value="">—</option>
-                {VEHICLE_TYPES.map((v) => (
-                  <option key={v.value} value={v.value}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <label className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
-              <Checkbox
-                checked={form.isWeekend}
-                onCheckedChange={(c) => set("isWeekend", Boolean(c))}
-              />
-              <span className="text-sm">Víkendový príplatok</span>
-            </label>
-            <label className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
-              <Checkbox
-                checked={form.isEvening}
-                onCheckedChange={(c) => set("isEvening", Boolean(c))}
-              />
-              <span className="text-sm">Večerný príplatok</span>
-            </label>
           </CardContent>
         </Card>
 
@@ -626,16 +642,25 @@ export function QuoteForm({
           <CardContent className="space-y-4">
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Práca</span>
-                <span>{formatCurrency(estimate.laborCost)}</span>
+                <span className="text-muted-foreground">Produkty</span>
+                <span>{formatCurrency(estimate.productsCost)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Doprava</span>
-                <span>{formatCurrency(estimate.transportCost)}</span>
+                <span className="text-muted-foreground">Montáž</span>
+                <span>{formatCurrency(estimate.montazCost)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Doplnkové služby</span>
                 <span>{formatCurrency(estimate.extrasCost)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Fixný poplatok</span>
+                <span>{formatCurrency(estimate.fixedFee)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>
+                  {estimate.totalUnits} ks · {estimate.totalAreaM2} m²
+                </span>
               </div>
               <div className="flex justify-between border-t border-border pt-2">
                 <span className="text-muted-foreground">Výpočet systému</span>
@@ -751,7 +776,7 @@ export function QuoteForm({
             <p className="text-xs leading-relaxed text-muted-foreground">
               {form.priceIsManual
                 ? "Tento rozsah sa zobrazí zákazníkovi. Interný výpočet ostáva ako referencia."
-                : "Rozpätie počíta s možným rozdielom medzi odhadovaným a skutočným rozsahom sťahovania."}
+                : "Rozpätie počíta s možným rozdielom po zameraní a finálnej špecifikácii."}
             </p>
           </CardContent>
         </Card>

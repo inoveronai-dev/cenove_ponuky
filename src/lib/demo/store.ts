@@ -7,7 +7,10 @@ import {
   DEMO_PRICING_ID,
   DEMO_USER_ID,
 } from "@/lib/demo/mode";
-import { calculateQuoteEstimate, DEFAULT_PRICING } from "@/lib/pricing/calculateQuoteEstimate";
+import {
+  calculateQuoteEstimate,
+  DEFAULT_PRICING,
+} from "@/lib/pricing/calculateQuoteEstimate";
 import { buildFallbackCopy } from "@/lib/ai/generateQuoteCopy";
 import type {
   Company,
@@ -16,6 +19,7 @@ import type {
   Quote,
   QuoteView,
   QuoteRow,
+  QuoteLineItem,
 } from "@/types/database";
 
 export type DemoStore = {
@@ -47,25 +51,64 @@ function nowIso() {
 
 function createSeedStore(): DemoStore {
   const created = nowIso();
+  const lineItems: QuoteLineItem[] = [
+    {
+      id: "item-1",
+      category: "plastove_okna",
+      widthMm: 1200,
+      heightMm: 1400,
+      count: 4,
+      color: "biela",
+      glazing: "trojsklo",
+      notes: null,
+    },
+    {
+      id: "item-2",
+      category: "plastove_dvere",
+      widthMm: 900,
+      heightMm: 2100,
+      count: 1,
+      color: "antracit",
+      glazing: "trojsklo",
+      notes: "vchodové dvere s výplňou GAVAplast",
+    },
+    {
+      id: "item-3",
+      category: "tieniaca_technika",
+      widthMm: 1200,
+      heightMm: 1400,
+      count: 4,
+      color: null,
+      glazing: null,
+      notes: "predokenné vonkajšie rolety",
+    },
+  ];
+
   const estimate = calculateQuoteEstimate(
     {
-      estimatedHours: 6,
-      workers: 3,
-      distanceKm: 55,
-      disassembly: true,
+      items: lineItems,
+      montaz: true,
+      demontazStarych: true,
+      likvidacia: true,
+      parapetVnutorny: true,
+      parapetVonkajsi: true,
     },
     DEFAULT_PRICING
   );
+
   const copy = buildFallbackCopy({
     customerName: "Ján Novák",
     customerFirstName: "Ján",
-    originAddress: "Bratislava – Ružinov",
-    destinationAddress: "Trnava",
-    originPropertyType: "3_izbovy",
-    boxCount: 35,
-    largeItems: "sedačka, posteľ, práčka, 2 skrine",
-    disassembly: true,
-    moveDate: "2026-09-28",
+    siteAddress: "Zlatovská 45, Trenčín",
+    propertyType: "rodinny_dom",
+    floor: 0,
+    lineItems,
+    montaz: true,
+    demontazStarych: true,
+    likvidacia: true,
+    parapetVnutorny: true,
+    parapetVonkajsi: true,
+    installDate: "2026-10-15",
   });
 
   const company: Company = {
@@ -73,9 +116,9 @@ function createSeedStore(): DemoStore {
     name: CLIENT_BRAND.legalName,
     subtitle: CLIENT_BRAND.subtitle,
     address: CLIENT_BRAND.address,
-    ico: "12345678",
-    dic: "2023456789",
-    ic_dph: "SK2023456789",
+    ico: CLIENT_BRAND.ico,
+    dic: null,
+    ic_dph: CLIENT_BRAND.icDph,
     email: CLIENT_BRAND.email,
     phone: CLIENT_BRAND.phone,
     website: CLIENT_BRAND.website,
@@ -85,7 +128,7 @@ function createSeedStore(): DemoStore {
     notify_on_first_open: true,
     notify_on_later_open: true,
     notification_cooldown_hours: 3,
-    notification_email: "demo@movequote.sk",
+    notification_email: CLIENT_BRAND.email,
     created_at: created,
     updated_at: created,
   };
@@ -93,21 +136,21 @@ function createSeedStore(): DemoStore {
   const pricing: PricingSettings = {
     id: DEMO_PRICING_ID,
     company_id: DEMO_COMPANY_ID,
-    hourly_rate_per_worker: DEFAULT_PRICING.hourlyRatePerWorker,
-    kilometer_rate: DEFAULT_PRICING.kilometerRate,
-    route_multiplier: DEFAULT_PRICING.routeMultiplier,
+    price_per_m2_plastove_okna: DEFAULT_PRICING.pricePerM2PlastoveOkna,
+    price_per_m2_plastove_dvere: DEFAULT_PRICING.pricePerM2PlastoveDvere,
+    price_per_m2_hlinik: DEFAULT_PRICING.pricePerM2Hlinik,
+    price_per_m2_interierove_dvere: DEFAULT_PRICING.pricePerM2InterieroveDvere,
+    price_per_m2_tieniaca: DEFAULT_PRICING.pricePerM2Tieniaca,
+    price_per_m2_garazove_brany: DEFAULT_PRICING.pricePerM2GarazoveBrany,
     fixed_fee: DEFAULT_PRICING.fixedFee,
-    disassembly_surcharge: DEFAULT_PRICING.disassemblySurcharge,
-    assembly_surcharge: DEFAULT_PRICING.assemblySurcharge,
-    packing_surcharge: DEFAULT_PRICING.packingSurcharge,
-    packing_material_surcharge: DEFAULT_PRICING.packingMaterialSurcharge,
-    heavy_items_surcharge: DEFAULT_PRICING.heavyItemsSurcharge,
-    disposal_surcharge: DEFAULT_PRICING.disposalSurcharge,
-    protective_wrapping_surcharge: DEFAULT_PRICING.protectiveWrappingSurcharge,
+    montaz_per_m2: DEFAULT_PRICING.montazPerM2,
+    demontaz_per_unit: DEFAULT_PRICING.demontazPerUnit,
+    likvidacia_fee: DEFAULT_PRICING.likvidaciaFee,
+    parapet_vnutorny_fee: DEFAULT_PRICING.parapetVnutornyFee,
+    parapet_vonkajsi_fee: DEFAULT_PRICING.parapetVonkajsiFee,
+    siete_fee: DEFAULT_PRICING.sieteFee,
     other_surcharge: DEFAULT_PRICING.otherSurcharge,
     minimum_job_price: DEFAULT_PRICING.minimumJobPrice,
-    weekend_surcharge_percent: DEFAULT_PRICING.weekendSurchargePercent,
-    evening_surcharge_percent: DEFAULT_PRICING.eveningSurchargePercent,
     buffer_min_multiplier: DEFAULT_PRICING.bufferMinMultiplier,
     buffer_max_multiplier: DEFAULT_PRICING.bufferMaxMultiplier,
     created_at: created,
@@ -125,42 +168,25 @@ function createSeedStore(): DemoStore {
     customer_name: "Ján Novák",
     customer_email: "jan.novak@email.sk",
     customer_phone: "+421 905 111 222",
-    origin_address: "Bratislava – Ružinov",
-    destination_address: "Trnava",
-    origin_property_type: "3_izbovy",
-    origin_floor: 4,
-    origin_elevator: true,
-    destination_floor: 2,
-    destination_elevator: true,
-    distance_km: 55,
-    box_count: 35,
-    large_items: "sedačka, posteľ, práčka, 2 skrine",
-    wardrobes_count: 2,
-    beds_count: 1,
-    sofas_count: 1,
-    appliances_count: 1,
-    disassembly: true,
-    assembly: false,
-    packing: false,
-    packing_material: false,
-    disposal: false,
-    heavy_items: false,
-    protective_wrapping: false,
+    site_address: "Zlatovská 45, Trenčín",
+    property_type: "rodinny_dom",
+    floor: 0,
+    line_items: lineItems,
+    montaz: true,
+    demontaz_starych: true,
+    likvidacia: true,
+    parapet_vnutorny: true,
+    parapet_vonkajsi: true,
+    siete_proti_hmyzu: false,
     other_service: false,
-    additional_services: {},
-    move_date: "2026-09-28",
-    estimated_hours: 6,
-    workers: 3,
-    vehicle_type: "velka_dodavka",
-    is_weekend: false,
-    is_evening: false,
+    install_date: "2026-10-15",
     internal_notes: "Demo ponuka — údaje môžete kedykoľvek zmeniť.",
-    customer_notes: "Klient preferuje ranný začiatok.",
+    customer_notes: "Zákazník preferuje antracitový dekor na vchodových dverách.",
     ai_intro: copy.aiIntro,
     ai_summary: copy.aiSummary,
     ai_scope_note: copy.aiScopeNote,
-    labor_amount: estimate.laborCost,
-    transport_amount: estimate.transportCost,
+    products_amount: estimate.productsCost,
+    montaz_amount: estimate.montazCost,
     extras_amount: estimate.extrasCost,
     base_estimate: estimate.baseEstimate,
     price_min: estimate.priceMin,
@@ -184,8 +210,8 @@ function createSeedStore(): DemoStore {
     pricing,
     profile: {
       id: DEMO_USER_ID,
-      full_name: "Demo obchodník",
-      email: "demo@movequote.sk",
+      full_name: "Obchodný zástupca",
+      email: CLIENT_BRAND.email,
     },
     quotes: [quote],
     quote_views: [],
@@ -197,38 +223,57 @@ function createSeedStore(): DemoStore {
 let memoryCache: DemoStore | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
 
+function isWindowDomainStore(store: DemoStore): boolean {
+  const quote = store.quotes?.[0] as QuoteRow | undefined;
+  const pricing = store.pricing as PricingSettings | undefined;
+  return Boolean(
+    quote &&
+      Array.isArray(quote.line_items) &&
+      pricing &&
+      "price_per_m2_plastove_okna" in pricing
+  );
+}
+
 async function ensureLoaded(): Promise<DemoStore> {
   if (memoryCache) return memoryCache;
 
   try {
     const raw = await fs.readFile(STORE_PATH, "utf8");
     const parsed = JSON.parse(raw) as DemoStore;
+    if (!isWindowDomainStore(parsed)) {
+      memoryCache = createSeedStore();
+      await persist(memoryCache);
+      return memoryCache;
+    }
+
     parsed.quotes = (parsed.quotes || []).map((q) => ({
       ...q,
       price_is_manual: Boolean(q.price_is_manual),
+      line_items: Array.isArray(q.line_items) ? q.line_items : [],
     }));
-    // Keep demo company on current TOP okno branding
+
     if (parsed.company) {
       parsed.company = {
         ...parsed.company,
         name: CLIENT_BRAND.legalName,
         subtitle: CLIENT_BRAND.subtitle,
-        address: parsed.company.address || CLIENT_BRAND.address,
+        address: CLIENT_BRAND.address,
+        ico: CLIENT_BRAND.ico,
+        ic_dph: CLIENT_BRAND.icDph,
         logo_url: CLIENT_BRAND.logoPath,
         primary_color: CLIENT_BRAND.primary,
-        email: parsed.company.email || CLIENT_BRAND.email,
-        phone: parsed.company.phone || CLIENT_BRAND.phone,
-        website: parsed.company.website || CLIENT_BRAND.website,
+        email: CLIENT_BRAND.email,
+        phone: CLIENT_BRAND.phone,
+        website: CLIENT_BRAND.website,
       };
-      memoryCache = parsed;
-      try {
-        await persist(memoryCache);
-      } catch {
-        // Keep in-memory branding if disk write fails
-      }
-      return memoryCache;
     }
+
     memoryCache = parsed;
+    try {
+      await persist(memoryCache);
+    } catch {
+      // keep memory
+    }
     return memoryCache;
   } catch {
     memoryCache = createSeedStore();

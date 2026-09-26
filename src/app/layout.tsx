@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     template: `%s · ${getAppName()}`,
   },
   description:
-    "Vytvárajte profesionálne webové cenové ponuky pre sťahovacie firmy za pár sekúnd.",
+    "Vytvárajte profesionálne webové cenové ponuky pre okná, dvere a tienenie — dodávka a montáž.",
 };
 
 export default function RootLayout({

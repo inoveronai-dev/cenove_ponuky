@@ -9,8 +9,7 @@ type QuoteNotifyFields = {
   company_id: string;
   created_by: string | null;
   customer_name: string;
-  origin_address: string | null;
-  destination_address: string | null;
+  site_address: string | null;
   price_min: number | null;
   price_max: number | null;
   last_notified_at: string | null;
@@ -42,7 +41,7 @@ function shouldSendNotification(
 async function attemptEmail(params: {
   to: string | null;
   title: string;
-  route: string;
+  siteAddress: string;
   price: string;
   customerName: string;
   quoteId: string;
@@ -62,8 +61,8 @@ async function attemptEmail(params: {
         to: params.to,
         subject: params.title,
         html: `
-          <p>${params.customerName} si práve pozrel cenovú ponuku.</p>
-          <p>${params.route}</p>
+          <p>${params.customerName} si práve pozrel cenový odhad dodávky a montáže okien/dverí.</p>
+          <p>${params.siteAddress}</p>
           <p><strong>Odhad:</strong> ${params.price}</p>
           <p><a href="${detailUrl}">Otvoriť detail ponuky</a></p>
         `,
@@ -109,9 +108,7 @@ export async function maybeNotifyQuoteOpened(params: {
   if (!company) return;
   if (!shouldSendNotification(company, quote, isFirstView)) return;
 
-  const route = [quote.origin_address, quote.destination_address]
-    .filter(Boolean)
-    .join(" → ");
+  const siteAddress = quote.site_address || "—";
   const price =
     quote.price_min != null && quote.price_max != null
       ? `${formatCurrency(quote.price_min)} – ${formatCurrency(quote.price_max)}`
@@ -121,12 +118,12 @@ export async function maybeNotifyQuoteOpened(params: {
     ? `${quote.customer_name} si práve otvoril cenovú ponuku`
     : `${quote.customer_name} znova otvoril cenovú ponuku`;
 
-  const body = `${quote.customer_name} si práve pozrel cenovú ponuku.\n${route}\nOdhad: ${price}`;
+  const body = `${quote.customer_name} si práve pozrel cenový odhad dodávky a montáže okien/dverí.\n${siteAddress}\nOdhad: ${price}`;
 
   const { emailStatus, emailError } = await attemptEmail({
     to: company.notification_email,
     title,
-    route,
+    siteAddress,
     price,
     customerName: quote.customer_name,
     quoteId: quote.id,
@@ -237,7 +234,7 @@ export async function sendQuoteEmailToCustomer(params: {
       subject: `Cenová ponuka od ${params.companyName}`,
       html: `
         <p>Dobrý deň, ${params.customerName},</p>
-        <p>pripravili sme pre vás orientačný cenový odhad sťahovania.</p>
+        <p>pripravili sme pre vás orientačný cenový odhad dodávky a montáže okien/dverí.</p>
         <p><a href="${params.quoteUrl}">Pozrieť cenovú ponuku</a></p>
         <p>S pozdravom<br/>${params.companyName}</p>
       `,

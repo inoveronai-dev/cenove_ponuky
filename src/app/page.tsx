@@ -38,11 +38,12 @@ export default function HomePage() {
               {BRAND.name} × {CLIENT_BRAND.name}
             </p>
             <h1 className="font-display text-4xl leading-[1.08] tracking-tight text-[var(--brand-ink)] md:text-5xl lg:text-6xl">
-              Profesionálne webové ponuky v štýle vašej značky.
+              Cenové ponuky na okná, dvere a tienenie v štýle vašej značky.
             </h1>
             <p className="mt-6 max-w-xl text-lg text-muted-foreground">
-              Vytvorte odhad za menej ako minútu, pošlite unikátny odkaz a
-              sledujte, či zákazník ponuku otvoril — v vizuáli {CLIENT_BRAND.name}.
+              Pripravte odhad dodávky a montáže za menej ako minútu, pošlite
+              unikátny odkaz a sledujte, či zákazník ponuku otvoril — v vizuáli{" "}
+              {CLIENT_BRAND.name}.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               {demo ? (
@@ -91,7 +92,7 @@ export default function HomePage() {
           {[
             {
               title: "Vytvoriť",
-              body: "Rýchly formulár, živý odhad ceny a profesionálny text.",
+              body: "Rýchly formulár pre okná a dvere, živý odhad ceny a profesionálny text.",
             },
             {
               title: "Odoslať",
