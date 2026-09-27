@@ -1,5 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { deflateSync, inflateSync } from "zlib";
+import { cookies } from "next/headers";
 import { addDays, format } from "date-fns";
 import { CLIENT_BRAND } from "@/lib/brand";
 import {
@@ -43,7 +45,22 @@ export type DemoStore = {
   notifications: Notification[];
 };
 
-const STORE_PATH = path.join(process.cwd(), ".data", "demo-store.json");
+type GlobalDemo = {
+  __movequoteDemoStore?: DemoStore;
+  __movequoteDemoWriteQueue?: Promise<void>;
+};
+
+const g = globalThis as unknown as GlobalDemo;
+
+const COOKIE_NAME = "mq_demo_store";
+const COOKIE_MAX = 3500;
+
+function storePath() {
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "movequote-demo-store.json");
+  }
+  return path.join(process.cwd(), ".data", "demo-store.json");
+}
 
 function nowIso() {
   return new Date().toISOString();
@@ -220,9 +237,6 @@ function createSeedStore(): DemoStore {
   };
 }
 
-let memoryCache: DemoStore | null = null;
-let writeQueue: Promise<void> = Promise.resolve();
-
 function isWindowDomainStore(store: DemoStore): boolean {
   const quote = store.quotes?.[0] as QuoteRow | undefined;
   const pricing = store.pricing as PricingSettings | undefined;
@@ -234,69 +248,139 @@ function isWindowDomainStore(store: DemoStore): boolean {
   );
 }
 
+function compressStore(store: DemoStore): string {
+  return deflateSync(Buffer.from(JSON.stringify(store), "utf8")).toString(
+    "base64url"
+  );
+}
+
+function decompressStore(raw: string): DemoStore | null {
+  try {
+    const json = inflateSync(Buffer.from(raw, "base64url")).toString("utf8");
+    return JSON.parse(json) as DemoStore;
+  } catch {
+    return null;
+  }
+}
+
+async function readCookieStore(): Promise<DemoStore | null> {
+  try {
+    const jar = await cookies();
+    const raw = jar.get(COOKIE_NAME)?.value;
+    if (!raw) return null;
+    const parsed = decompressStore(raw);
+    if (!parsed || !isWindowDomainStore(parsed)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCookieStore(store: DemoStore) {
+  try {
+    const packed = compressStore(store);
+    if (packed.length > COOKIE_MAX) {
+      // Prefer keeping latest quotes so newly created public links work
+      const slim: DemoStore = {
+        ...store,
+        quote_views: [],
+        quote_versions: [],
+        notifications: [],
+        quotes: store.quotes.slice(0, 8),
+      };
+      const packedSlim = compressStore(slim);
+      if (packedSlim.length > COOKIE_MAX) return;
+      const jar = await cookies();
+      jar.set(COOKIE_NAME, packedSlim, {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.VERCEL === "1",
+        maxAge: 60 * 60 * 24 * 30,
+      });
+      return;
+    }
+    const jar = await cookies();
+    jar.set(COOKIE_NAME, packed, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: process.env.VERCEL === "1",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+  } catch (err) {
+    console.error("Demo cookie write failed:", err);
+  }
+}
+
+function normalizeQuotes(store: DemoStore): DemoStore {
+  store.quotes = (store.quotes || []).map((q) => ({
+    ...q,
+    price_is_manual: Boolean(q.price_is_manual),
+    line_items: Array.isArray(q.line_items) ? q.line_items : [],
+  }));
+  if (store.company) {
+    store.company = {
+      ...store.company,
+      name: CLIENT_BRAND.legalName,
+      subtitle: CLIENT_BRAND.subtitle,
+      address: CLIENT_BRAND.address,
+      ico: CLIENT_BRAND.ico,
+      ic_dph: CLIENT_BRAND.icDph,
+      logo_url: CLIENT_BRAND.logoPath,
+      primary_color: CLIENT_BRAND.primary,
+      email: CLIENT_BRAND.email,
+      phone: CLIENT_BRAND.phone,
+      website: CLIENT_BRAND.website,
+    };
+  }
+  return store;
+}
+
 async function ensureLoaded(): Promise<DemoStore> {
-  if (memoryCache) return memoryCache;
+  if (g.__movequoteDemoStore) return g.__movequoteDemoStore;
+
+  const fromCookie = await readCookieStore();
+  if (fromCookie) {
+    g.__movequoteDemoStore = normalizeQuotes(fromCookie);
+    return g.__movequoteDemoStore;
+  }
 
   try {
-    const raw = await fs.readFile(STORE_PATH, "utf8");
+    const raw = await fs.readFile(storePath(), "utf8");
     const parsed = JSON.parse(raw) as DemoStore;
     if (!isWindowDomainStore(parsed)) {
-      memoryCache = createSeedStore();
-      await persist(memoryCache);
-      return memoryCache;
+      g.__movequoteDemoStore = createSeedStore();
+      await persist(g.__movequoteDemoStore);
+      return g.__movequoteDemoStore;
     }
-
-    parsed.quotes = (parsed.quotes || []).map((q) => ({
-      ...q,
-      price_is_manual: Boolean(q.price_is_manual),
-      line_items: Array.isArray(q.line_items) ? q.line_items : [],
-    }));
-
-    if (parsed.company) {
-      parsed.company = {
-        ...parsed.company,
-        name: CLIENT_BRAND.legalName,
-        subtitle: CLIENT_BRAND.subtitle,
-        address: CLIENT_BRAND.address,
-        ico: CLIENT_BRAND.ico,
-        ic_dph: CLIENT_BRAND.icDph,
-        logo_url: CLIENT_BRAND.logoPath,
-        primary_color: CLIENT_BRAND.primary,
-        email: CLIENT_BRAND.email,
-        phone: CLIENT_BRAND.phone,
-        website: CLIENT_BRAND.website,
-      };
-    }
-
-    memoryCache = parsed;
-    try {
-      await persist(memoryCache);
-    } catch {
-      // keep memory
-    }
-    return memoryCache;
+    g.__movequoteDemoStore = normalizeQuotes(parsed);
+    await writeCookieStore(g.__movequoteDemoStore);
+    return g.__movequoteDemoStore;
   } catch {
-    memoryCache = createSeedStore();
-    try {
-      await persist(memoryCache);
-    } catch {
-      // Keep in-memory seed if disk is unavailable
-    }
-    return memoryCache;
+    g.__movequoteDemoStore = createSeedStore();
+    await persist(g.__movequoteDemoStore);
+    return g.__movequoteDemoStore;
   }
 }
 
 async function persist(store: DemoStore) {
-  memoryCache = store;
-  writeQueue = writeQueue.then(async () => {
-    try {
-      await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
-      await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
-    } catch (err) {
-      console.error("Demo store write failed:", err);
-    }
-  });
-  await writeQueue;
+  g.__movequoteDemoStore = store;
+  await writeCookieStore(store);
+
+  g.__movequoteDemoWriteQueue = (g.__movequoteDemoWriteQueue || Promise.resolve())
+    .then(async () => {
+      try {
+        const target = storePath();
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        await fs.writeFile(target, JSON.stringify(store, null, 2), "utf8");
+      } catch (err) {
+        console.error("Demo store write failed:", err);
+      }
+    })
+    .catch(() => undefined);
+
+  await g.__movequoteDemoWriteQueue;
 }
 
 export async function readDemoStore(): Promise<DemoStore> {

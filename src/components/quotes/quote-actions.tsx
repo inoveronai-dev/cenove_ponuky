@@ -8,7 +8,7 @@ import {
   duplicateQuoteAction,
   markQuoteSentAction,
 } from "@/app/actions/quotes";
-import { publicQuoteUrl } from "@/lib/quotes/public-id";
+import { publicQuotePath } from "@/lib/quotes/public-id";
 import { Button } from "@/components/ui/button";
 import type { Quote } from "@/types/database";
 
@@ -21,9 +21,14 @@ export function QuoteActions({
 }) {
   const router = useRouter();
   const size = compact ? "sm" : "default";
+  const path = publicQuotePath(quote.public_id);
 
   async function copyLink() {
-    await navigator.clipboard.writeText(publicQuoteUrl(quote.public_id));
+    const absolute =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${path}`
+        : path;
+    await navigator.clipboard.writeText(absolute);
     await markQuoteSentAction(quote.id);
     toast.success("Link skopírovaný");
     router.refresh();
@@ -43,7 +48,7 @@ export function QuoteActions({
       {!compact && (
         <>
           <Button asChild variant="outline" size={size}>
-            <Link href={`/ponuka/${quote.public_id}`} target="_blank">
+            <Link href={path} target="_blank">
               Zobraziť ako zákazník
             </Link>
           </Button>

@@ -40,10 +40,11 @@ export function formatDateTimeSk(date: string | Date | null | undefined): string
 export function getAppUrl(): string {
   return (
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    "http://localhost:3000"
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    "http://127.0.0.1:3000"
   );
 }
 
 export function getAppName(): string {
-  return process.env.NEXT_PUBLIC_APP_NAME || "MoveQuote";
+  return process.env.NEXT_PUBLIC_APP_NAME || "Cenové ponuky";
 }
