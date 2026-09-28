@@ -89,6 +89,9 @@ export function buildFallbackCopy(input: QuoteCopyInput): QuoteCopyResult {
   };
 }
 
+/** Primary model for filling quote fields + writing offer copy */
+const OPENAI_MODEL = "gpt-5.4";
+
 function getOpenAI(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
@@ -104,7 +107,7 @@ export async function generateQuoteCopy(
 
   try {
     const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: OPENAI_MODEL,
       temperature: 0.4,
       response_format: { type: "json_object" },
       messages: [
@@ -165,61 +168,70 @@ export async function parseQuickInput(text: string): Promise<QuickInputResult> {
     lineItems: null,
   };
 
+  const cleaned = preprocessTranscript(text);
+  const heuristic = heuristicParse(cleaned, empty);
+
   const client = getOpenAI();
-  if (!client) {
-    return heuristicParse(text, empty);
-  }
+  if (!client) return heuristic;
 
   try {
     const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: OPENAI_MODEL,
       temperature: 0,
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
-          content: `Si extraktor údajov pre cenové ponuky firmy TOP Okno Trenčín (okná, dvere, tieniaca technika, garážové brány, siete proti hmyzu).
+          content: `Si asistent TOP Okno Trenčín. Tvoja úloha NIE JE len „prepis“ — máš SPRÁVNE DOPLNIŤ VŠETKY polia cenovej ponuky z poznámky / Whisper prepisu, aby sa formulár vyplnil naraz.
 
-Úloha: zo slovenskej poznámky / hlasového prepisu vyťahni VŠETKY dostupné polia. Nevymýšľaj — chýbajúce daj null. Oprav typické chyby Whisperu (napr. „Hemizu/hemizu“ = hmyzu, „okna/okien“ = okná).
+Cieľ: kompletné, čisté hodnoty pripravené na uloženie do formulára (zákazník, adresa, objekt, termín, položka okien/dverí, farba, zasklenie, služby). Nevymýšľaj. Chýbajúce = null.
 
-Pravidlá:
-- customerFirstName / customerLastName: rozdeľ celé meno (napr. „Pavol Marek“ → Pavol / Marek). customerName = celé meno.
-- customerPhone: normalizuj na formát 0XXX XXX XXX alebo 09XX XXX XXX (odstráň pomlčky, nechaj medzery podľa slovenskej konvencie).
-- customerEmail: ak je v texte.
-- siteAddress: CELÁ adresa montáže vrátane ulice a čísla (napr. „Štefánikova 7, Trenčín“). Nikdy nevynechávaj ulicu, ak je v texte.
-- propertyType: byt | rodinny_dom | kancelaria | ine (rodinný dom → rodinny_dom).
-- floor: číslo poschodia, inak null.
-- installDate: YYYY-MM-DD (napr. 15.10.2026 → 2026-10-15). Ak je len deň.mesiac bez roku, použi aktuálny/nasledujúci logický rok.
-- category: plastove_okna | plastove_dvere | hlinikove_systemy | interierove_dvere | tieniaca_technika | garazove_brany
-- widthMm, heightMm, count, color, glazing (dvojsklo|trojsklo|ine) pre hlavnú položku.
-- lineItems: pole položiek, ak ich je viac; inak môžeš dať jednu položku aj do category/widthMm/... a lineItems=null.
-- montaz: true ak spomína montáž nových.
-- demontazStarych: true ak demontáž / výmena starých okien.
-- likvidacia: true ak likvidácia / odvoz starých.
-- parapetVnutorny / parapetVonkajsi: true podľa textu.
-- sieteProtiHmyzu: true pri sieťach proti hmyzu (aj preklepy Hemizu, hymzu, hmyz).
-- otherService: true len pri iných prácach.
-- notes: krátky súhrn alebo null (neopakuj celý text).
+Oprav Whisper: kná→okná, Hemizu→hmyzu, Prepokladaný→Predpokladaný, Početku→Počet, Za sklenie→Zasklenie.
+Rozmery: „1200-1800 mm“ / „šírkou 1200-1800“ pri oknách = widthMm 1200, heightMm 1800 (nie naopak, nie iné čísla).
 
-Vráť JEDEN JSON objekt s kľúčmi:
+KRITICKÉ pri dopĺňaní:
+- customerFirstName + customerLastName + customerName + customerPhone (09XX XXX XXX)
+- siteAddress = KRÁTKA adresa, napr. „Vysoká 5, Trenčín“. NIKDY celá veta, NIKDY „Adresa a ulica je“, „Typ objektu“, „Predpokladaný dátum“, položky ponuky.
+- propertyType: byt|rodinny_dom|kancelaria|ine
+- installDate: YYYY-MM-DD (29.09.2026 → 2026-09-29), celý dátum
+- category: plastove_okna|plastove_dvere|hlinikove_systemy|interierove_dvere|tieniaca_technika|garazove_brany
+- widthMm, heightMm, count, color (slovensky: modrá, biela…), glazing: dvojsklo|trojsklo|ine
+- montaz / demontazStarych / likvidacia / parapetVnutorny / parapetVonkajsi / sieteProtiHmyzu podľa textu
+- lineItems: ak je jedna hlavná položka, môžeš ju dať aj do category/widthMm/… a lineItems=null
+
+Vráť JSON:
 siteAddress, propertyType, floor, installDate, notes, customerName, customerFirstName, customerLastName, customerPhone, customerEmail, category, widthMm, heightMm, count, color, glazing, montaz, demontazStarych, likvidacia, parapetVnutorny, parapetVonkajsi, sieteProtiHmyzu, otherService, lineItems.`,
         },
-        { role: "user", content: text },
+        { role: "user", content: cleaned },
       ],
     });
 
     const raw = completion.choices[0]?.message?.content;
-    if (!raw) return heuristicParse(text, empty);
+    if (!raw) return heuristic;
     const json = JSON.parse(raw);
     const parsed = quickInputSchema.safeParse(normalizeParsedPayload(json));
-    if (!parsed.success) {
-      const heuristic = heuristicParse(text, empty);
-      return mergeQuickParse(heuristic, softParse(json));
-    }
-    return mergeQuickParse(heuristicParse(text, empty), parsed.data);
+    const ai = parsed.success ? parsed.data : softParse(json);
+    return smartMerge(heuristic, ai);
   } catch {
-    return heuristicParse(text, empty);
+    return heuristic;
   }
+}
+
+function preprocessTranscript(text: string): string {
+  return text
+    .replace(/\bplastové\s+kná\b/gi, "plastové okná")
+    .replace(/\bkná\b/gi, "okná")
+    .replace(/\bHemizu\b/gi, "hmyzu")
+    .replace(/\bhemizu\b/gi, "hmyzu")
+    .replace(/\bPrepokladaný\b/gi, "Predpokladaný")
+    .replace(/\bPočetku\b/gi, "Počet")
+    .replace(/\bZa\s+sklenie\b/gi, "Zasklenie")
+    .replace(
+      /(šírk\w*|okn\w*|rozmer\w*)([^\d]{0,30})(\d{3,4})\s*[-–]\s*(\d{3,4})(\s*mm)?/gi,
+      "$1$2$3x$4$5"
+    )
+    .replace(/(\d{3,4})\s*[-–]\s*(\d{3,4})\s*mm/gi, "$1x$2 mm")
+    .trim();
 }
 
 function normalizeParsedPayload(raw: Record<string, unknown>) {
@@ -250,6 +262,9 @@ function normalizeParsedPayload(raw: Record<string, unknown>) {
   if (typeof out.customerPhone === "string") {
     out.customerPhone = normalizePhone(out.customerPhone);
   }
+  if (typeof out.siteAddress === "string") {
+    out.siteAddress = sanitizeSiteAddress(out.siteAddress);
+  }
   return out;
 }
 
@@ -263,41 +278,84 @@ function softParse(raw: Record<string, unknown>): Partial<QuickInputResult> {
   }
 }
 
-function mergeQuickParse(
-  base: QuickInputResult,
-  overlay: Partial<QuickInputResult>
+/** Heuristic wins on structured fields; address picked by cleanliness score */
+function smartMerge(
+  heuristic: QuickInputResult,
+  ai: Partial<QuickInputResult>
 ): QuickInputResult {
-  const merged = {
-    ...base,
+  return {
+    ...ai,
     ...Object.fromEntries(
-      Object.entries(overlay).filter(([, v]) => v !== null && v !== undefined)
+      Object.entries(heuristic).filter(([, v]) => v !== null && v !== undefined)
     ),
+    siteAddress: pickBestAddress(heuristic.siteAddress, ai.siteAddress ?? null),
+    widthMm: heuristic.widthMm ?? ai.widthMm ?? null,
+    heightMm: heuristic.heightMm ?? ai.heightMm ?? null,
+    count: heuristic.count ?? ai.count ?? null,
+    installDate: heuristic.installDate ?? ai.installDate ?? null,
+    customerPhone: heuristic.customerPhone ?? ai.customerPhone ?? null,
+    customerFirstName:
+      heuristic.customerFirstName ?? ai.customerFirstName ?? null,
+    customerLastName: heuristic.customerLastName ?? ai.customerLastName ?? null,
+    customerName: heuristic.customerName ?? ai.customerName ?? null,
+    color: heuristic.color ?? ai.color ?? null,
+    glazing: heuristic.glazing ?? ai.glazing ?? null,
+    category: heuristic.category ?? ai.category ?? null,
+    propertyType: heuristic.propertyType ?? ai.propertyType ?? null,
+    montaz: heuristic.montaz ?? ai.montaz ?? null,
+    demontazStarych: heuristic.demontazStarych ?? ai.demontazStarych ?? null,
+    sieteProtiHmyzu: heuristic.sieteProtiHmyzu ?? ai.sieteProtiHmyzu ?? null,
+    likvidacia: heuristic.likvidacia ?? ai.likvidacia ?? null,
+    parapetVnutorny: heuristic.parapetVnutorny ?? ai.parapetVnutorny ?? null,
+    parapetVonkajsi: heuristic.parapetVonkajsi ?? ai.parapetVonkajsi ?? null,
+    notes: ai.notes ?? heuristic.notes ?? null,
   } as QuickInputResult;
-
-  merged.siteAddress = preferRicherAddress(
-    base.siteAddress,
-    overlay.siteAddress ?? null
-  );
-
-  return merged;
 }
 
-function preferRicherAddress(
+function sanitizeSiteAddress(raw: string): string | null {
+  let s = raw.trim();
+  s = s.replace(
+    /^(adresa\s+a\s+ulica\s+je|adresa\s+je|ulica\s+je|adresa\s+a\s+ulica|adresa|ulica)\s+/i,
+    ""
+  );
+  // Cut off if model pasted the rest of the transcript
+  s = s.split(
+    /\b(?:typ objektu|predpokladan|prepokladan|položk|plastov|farba|zasklen|telefón|meno zákaz|počet|montáž|dátum mont)/i
+  )[0];
+  s = s.replace(/[.,;\s]+$/g, "").trim();
+  if (!s || s.length < 3) return null;
+  return s;
+}
+
+function addressQuality(s: string): number {
+  const t = s.trim();
+  if (!t) return -1000;
+  let score = 0;
+  if (/\d/.test(t)) score += 40;
+  if (/trenčín|bratislava|žilina|nitra|trnava|piešťany|prievidza/i.test(t))
+    score += 25;
+  if (/[A-Za-zÁ-ž]{3,}\s+\d+/i.test(t)) score += 50;
+  if (
+    /typ objektu|predpoklad|prepoklad|položk|farba|zasklen|telefón|meno zákaz|adresa a ulica|plastov/i.test(
+      t
+    )
+  ) {
+    score -= 120;
+  }
+  if (t.length > 55) score -= 40;
+  if (t.length < 40) score += 10;
+  return score;
+}
+
+function pickBestAddress(
   a?: string | null,
   b?: string | null
 ): string | null {
-  const x = (a || "").trim();
-  const y = (b || "").trim();
-  if (!x) return y || null;
-  if (!y) return x || null;
-  // Prefer the value that includes street-like tokens / is longer
-  const score = (s: string) => {
-    let n = s.length;
-    if (/\d/.test(s)) n += 20;
-    if (/ulic|námest|tried|cest|alej|nábrež|štefán|štefan/i.test(s)) n += 15;
-    return n;
-  };
-  return score(y) >= score(x) ? y : x;
+  const x = a ? sanitizeSiteAddress(a) : null;
+  const y = b ? sanitizeSiteAddress(b) : null;
+  if (!x) return y;
+  if (!y) return x;
+  return addressQuality(y) > addressQuality(x) ? y : x;
 }
 
 function normalizePhone(raw: string): string {
@@ -328,7 +386,6 @@ function heuristicParse(text: string, empty: QuickInputResult): QuickInputResult
   const lower = text.toLowerCase();
   const result = { ...empty };
 
-  // Name: "Meno zákazníka je X" / "zákazník X" / "volá sa X"
   const nameMatch = text.match(
     /(?:meno\s+zákazníka\s+je|zákazník(?:a)?\s+(?:je\s+)?|volá\s+sa|meno[:\s]+)\s*([A-ZÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽ][a-záäčďéíľňóôŕšťúýž]+(?:\s+[A-ZÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽ][a-záäčďéíľňóôŕšťúýž]+)+)/i
   );
@@ -357,9 +414,9 @@ function heuristicParse(text: string, empty: QuickInputResult): QuickInputResult
   else if (/interi[eé]rov/.test(lower)) result.category = "interierove_dvere";
   else if (/dver/.test(lower) && !/okn/.test(lower))
     result.category = "plastove_dvere";
-  else if (/okn/.test(lower)) result.category = "plastove_okna";
+  else if (/okn|kná/.test(lower)) result.category = "plastove_okna";
 
-  if (/rodinn|v\s+dome|rodinnom\s+dome/.test(lower))
+  if (/rodinn|v\s+dome|rodinnom\s+dome|typ objektu\s+je\s+rodinn/.test(lower))
     result.propertyType = "rodinny_dom";
   else if (/byt/.test(lower)) result.propertyType = "byt";
   else if (/kancel/.test(lower)) result.propertyType = "kancelaria";
@@ -367,26 +424,39 @@ function heuristicParse(text: string, empty: QuickInputResult): QuickInputResult
   const floorMatch = lower.match(/(\d+)\.?\s*poschod/);
   if (floorMatch) result.floor = Number(floorMatch[1]);
 
-  const dimMatch = lower.match(/(\d{3,4})\s*[x×]\s*(\d{3,4})\s*(?:mm)?/);
+  // Dimensions: prefer near window/width context; allow 1200-1800 as WxH
+  const dimMatch =
+    lower.match(
+      /(?:šírk\w*|okn\w*|kná|rozmer\w*|mm)[^\d]{0,48}(\d{3,4})\s*[x×\-–]\s*(\d{3,4})/
+    ) ||
+    lower.match(/(\d{3,4})\s*[x×\-–]\s*(\d{3,4})\s*mm/) ||
+    lower.match(/(\d{3,4})\s*[x×]\s*(\d{3,4})/);
   if (dimMatch) {
     result.widthMm = Number(dimMatch[1]);
     result.heightMm = Number(dimMatch[2]);
   }
 
   const countMatch =
-    lower.match(/(\d+)\s*[x×]\s*(?:plastov[^ ]*\s+)?(?:okn|dver)/) ||
+    lower.match(/(?:počet\w*|početku|počet)\s*(?:sú\s*)?(?:bude\s*)?(\d{1,3})/) ||
+    lower.match(/(\d+)\s*[x×]\s*(?:plastov[^ ]*\s+)?(?:okn|dver|kná)/) ||
     lower.match(
-      /(?:meni[tť]|vymeni[tť]|robi[tť]|da[tť])\s+(\d+)\s+(?:plastov[^ ]*\s+)?(?:okn|dver)/
+      /(?:meni[tť]|vymeni[tť]|robi[tť]|da[tť])\s+(\d+)\s+(?:plastov[^ ]*\s+)?(?:okn|dver|kná)/
     ) ||
-    lower.match(/(\d+)\s+(?:ks\s+)?(?:plastov[^ ]*\s+)?okn/);
-  if (countMatch) result.count = Number(countMatch[1]);
+    lower.match(/(\d+)\s+(?:ks\s+)?(?:plastov[^ ]*\s+)?(?:okn|kná)/);
+  if (countMatch) {
+    const n = Number(countMatch[1]);
+    if (n >= 1 && n <= 200) result.count = n;
+  }
 
   if (/trojsklo/.test(lower)) result.glazing = "trojsklo";
   else if (/dvojsklo/.test(lower)) result.glazing = "dvojsklo";
 
   if (/biel/.test(lower)) result.color = "biela";
+  else if (/modr/.test(lower)) result.color = "modrá";
   else if (/antracit|antracitov/.test(lower)) result.color = "antracit";
   else if (/hned|orech|zlatý\s+dub|zlaty\s+dub/.test(lower)) result.color = "hnedá";
+  else if (/siv|šed/.test(lower)) result.color = "sivá";
+  else if (/zelen/.test(lower)) result.color = "zelená";
 
   if (/mont[aá][zž]/.test(lower)) result.montaz = true;
   if (/demont|star[eé]\s+okn|vymen/.test(lower)) result.demontazStarych = true;
@@ -399,21 +469,21 @@ function heuristicParse(text: string, empty: QuickInputResult): QuickInputResult
 
   const dateNearTerm =
     text.match(
-      /term[ií]n[^0-9]{0,40}(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?/i
-    ) ||
-    text.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+      /(?:term[ií]n|d[aá]tum\s+mont|mont[aá][zž]e\s+je)[^0-9]{0,40}(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?/i
+    ) || text.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
   if (dateNearTerm) {
     result.installDate = normalizeSlovakDate(
       `${dateNearTerm[1]}.${dateNearTerm[2]}.${dateNearTerm[3] || new Date().getFullYear()}`
     );
   }
 
-  const addrMatch = text.match(
-    /(?:adresa|mont[aá][zž]\s+na|na adrese)[:\s]+([^,.]+(?:,[^.]+)?)/i
+  // "Adresa a ulica je Vysoká 5 v Trenčíne"
+  const addrIsStreetInCity = text.match(
+    /(?:adresa|ulica)(?:\s+a\s+ulica)?(?:\s+je)?\s+([A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž][A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž\-]+)\s+(\d+[\/A-Za-z]?)\s+v\s+(Trenčíne|Bratislave|Žiline|Nitre|Trnave|Piešťanoch|Prievidzi)/i
   );
-  if (addrMatch) result.siteAddress = addrMatch[1].trim();
-
-  // "Trenčín na Štefánikovej 7" / "na Štefánikovej 7 v Trenčíne" / "Štefánikova 7, Trenčín"
+  const streetInCity = text.match(
+    /\b([A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž][A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž\-]+)\s+(\d+[\/A-Za-z]?)\s+v\s+(Trenčíne|Bratislave|Žiline|Nitre|Trnave|Piešťanoch|Prievidzi)\b/i
+  );
   const cityThenStreet = text.match(
     /(Trenčín|Bratislava|Žilina|Nitra|Trnava|Piešťany|Prievidza|Považská Bystrica)\s+na\s+([A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž][A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž\-]+)\s+(\d+[\/A-Za-z]?)/i
   );
@@ -424,7 +494,11 @@ function heuristicParse(text: string, empty: QuickInputResult): QuickInputResult
     /([A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž][A-Za-zÁÄČĎÉÍĽŇÓÔŔŠŤÚÝŽáäčďéíľňóôŕšťúýž\-]+)\s+(\d+[\/A-Za-z]?)\s*,\s*(Trenčín|Bratislava|Žilina|Nitra|Trnava|Piešťany|Prievidza)/i
   );
 
-  if (cityThenStreet) {
+  if (addrIsStreetInCity) {
+    result.siteAddress = `${improveStreetCase(addrIsStreetInCity[1])} ${addrIsStreetInCity[2]}, ${normalizeCityName(addrIsStreetInCity[3])}`;
+  } else if (streetInCity) {
+    result.siteAddress = `${improveStreetCase(streetInCity[1])} ${streetInCity[2]}, ${normalizeCityName(streetInCity[3])}`;
+  } else if (cityThenStreet) {
     result.siteAddress = `${improveStreetCase(cityThenStreet[2])} ${cityThenStreet[3]}, ${normalizeCityName(cityThenStreet[1])}`;
   } else if (streetThenCity) {
     result.siteAddress = `${improveStreetCase(streetThenCity[1])} ${streetThenCity[2]}, ${normalizeCityName(streetThenCity[3])}`;
@@ -434,17 +508,11 @@ function heuristicParse(text: string, empty: QuickInputResult): QuickInputResult
     const city = text.match(
       /(Trenčín|Bratislava|Žilina|Nitra|Trnava|Piešťany|Prievidza|Považská Bystrica)/i
     );
-    if (city && !result.siteAddress) {
-      result.siteAddress = normalizeCityName(city[1]);
-    } else if (city && result.siteAddress) {
-      const current = result.siteAddress;
-      if (!new RegExp(city[1].slice(0, 5), "i").test(current)) {
-        result.siteAddress = `${current}, ${normalizeCityName(city[1])}`;
-      }
-      if (/rodinn|dome|byt/.test(current.toLowerCase()) && !/\d/.test(current)) {
-        result.siteAddress = normalizeCityName(city[1]);
-      }
-    }
+    if (city) result.siteAddress = normalizeCityName(city[1]);
+  }
+
+  if (result.siteAddress) {
+    result.siteAddress = sanitizeSiteAddress(result.siteAddress);
   }
 
   return result;
@@ -469,7 +537,6 @@ function normalizeCityName(raw: string): string {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-/** Speech often uses genitive (Štefánikovej) — normalize to common address form */
 function improveStreetCase(raw: string): string {
   let s = raw.trim();
   if (s.toLowerCase().endsWith("ovej")) {
