@@ -125,7 +125,7 @@ Používa sa len na:
 1. personalizovaný úvod / súhrn / poznámku k rozsahu
 2. štruktúrované „Rýchle zadanie“ (Zod validácia)
 
-Model default: `gpt-4o-mini`. Pri chybe alebo chýbajúcom kľúči → fallback templates.
+Model default: `gpt-5.4` (dopĺňanie polí + text ponuky). Pri chybe alebo chýbajúcom kľúči → fallback templates / heuristiky.
 
 ---
 
