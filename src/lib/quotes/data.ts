@@ -1,4 +1,8 @@
 import { isDemoMode } from "@/lib/demo/mode";
+import {
+  decodePublicSnapshot,
+  loadPublicSnapshot,
+} from "@/lib/demo/public-snapshot";
 import { readDemoStore } from "@/lib/demo/store";
 import { createClient } from "@/lib/supabase/server";
 import type { Quote, QuoteView } from "@/types/database";
@@ -48,14 +52,34 @@ export async function getQuoteViews(quoteId: string): Promise<QuoteView[]> {
   return (data as QuoteView[]) || [];
 }
 
-export async function getPublicQuoteByPublicId(publicId: string) {
+export async function getPublicQuoteByPublicId(
+  publicId: string,
+  encodedSnapshot?: string | null
+) {
   if (isDemoMode()) {
     const store = await readDemoStore();
     const quote = store.quotes.find(
       (q) => q.public_id === publicId && !q.archived_at
     );
-    if (!quote) return null;
-    return { quote, company: store.company };
+    if (quote) return { quote, company: store.company };
+
+    const fromFileOrCookie = await loadPublicSnapshot(publicId);
+    if (fromFileOrCookie && !fromFileOrCookie.quote.archived_at) {
+      return fromFileOrCookie;
+    }
+
+    if (encodedSnapshot) {
+      const decoded = decodePublicSnapshot(encodedSnapshot);
+      if (
+        decoded &&
+        decoded.quote.public_id === publicId &&
+        !decoded.quote.archived_at
+      ) {
+        return decoded;
+      }
+    }
+
+    return null;
   }
 
   const { createAdminClient } = await import("@/lib/supabase/admin");

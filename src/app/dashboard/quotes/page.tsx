@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { QUOTE_STATUSES } from "@/lib/brand";
+import { quoteSharePath } from "@/lib/quotes/public-id";
 import { formatCurrency, formatDateSk, formatDateTimeSk } from "@/lib/utils";
 import { getCompanyQuotes, getWorkspaceContext } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
@@ -82,7 +83,11 @@ export default async function QuotesPage({
                     <td className="py-3">{q.view_count}×</td>
                     <td className="py-3">{formatDateTimeSk(q.last_viewed_at)}</td>
                     <td className="py-3">
-                      <QuoteActions quote={q} compact />
+                      <QuoteActions
+                        quote={q}
+                        sharePath={quoteSharePath(q, ctx.company)}
+                        compact
+                      />
                     </td>
                   </tr>
                 ))}

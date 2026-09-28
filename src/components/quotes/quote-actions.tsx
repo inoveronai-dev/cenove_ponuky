@@ -8,20 +8,22 @@ import {
   duplicateQuoteAction,
   markQuoteSentAction,
 } from "@/app/actions/quotes";
-import { publicQuotePath } from "@/lib/quotes/public-id";
 import { Button } from "@/components/ui/button";
 import type { Quote } from "@/types/database";
 
 export function QuoteActions({
   quote,
+  sharePath,
   compact = false,
 }: {
   quote: Quote;
+  /** Prefer share path with embedded demo snapshot so /ponuka works on Vercel */
+  sharePath?: string;
   compact?: boolean;
 }) {
   const router = useRouter();
   const size = compact ? "sm" : "default";
-  const path = publicQuotePath(quote.public_id);
+  const path = sharePath || `/ponuka/${quote.public_id}`;
 
   async function copyLink() {
     const absolute =

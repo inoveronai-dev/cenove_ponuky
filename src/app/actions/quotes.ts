@@ -12,7 +12,7 @@ import {
   DEFAULT_PRICING,
 } from "@/lib/pricing/calculateQuoteEstimate";
 import { mapPricingSettings } from "@/lib/pricing/mapPricingSettings";
-import { generatePublicId, publicQuoteUrl } from "@/lib/quotes/public-id";
+import { generatePublicId, quoteShareUrl } from "@/lib/quotes/public-id";
 import { quoteFormSchema, type QuoteFormValues } from "@/lib/quotes/schemas";
 import { sendQuoteEmailToCustomer } from "@/lib/notifications/sendOpenNotification";
 import { createClient } from "@/lib/supabase/server";
@@ -611,7 +611,7 @@ export async function sendQuoteEmailAction(quoteId: string) {
     to: quote.customer_email,
     customerName: quote.customer_name,
     companyName: ctx.company.name,
-    quoteUrl: publicQuoteUrl(quote.public_id),
+    quoteUrl: quoteShareUrl(quote, ctx.company),
     fromEmail: process.env.NOTIFICATION_FROM_EMAIL,
   });
 

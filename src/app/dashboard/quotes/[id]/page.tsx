@@ -7,6 +7,7 @@ import {
   propertyTypeLabel,
 } from "@/lib/brand";
 import { getQuoteById, getQuoteViews } from "@/lib/quotes/data";
+import { quoteSharePath } from "@/lib/quotes/public-id";
 import {
   formatCurrency,
   formatDateSk,
@@ -44,6 +45,7 @@ export default async function QuoteDetailPage({
   if (!quote) notFound();
 
   const timeline = await getQuoteViews(quote.id);
+  const sharePath = quoteSharePath(quote, ctx.company);
 
   const services = INSTALL_SERVICES.filter((s) => {
     switch (s.key) {
@@ -82,18 +84,13 @@ export default async function QuoteDetailPage({
           </p>
           <p className="mt-2 text-sm">
             Verejný link:{" "}
-            <Link
-              href={`/ponuka/${quote.public_id}`}
-              className="underline"
-              target="_blank"
-            >
+            <Link href={sharePath} className="underline" target="_blank">
               /ponuka/{quote.public_id}
             </Link>
           </p>
         </div>
         <div className="flex flex-col items-start gap-2">
-          <QuoteActions quote={quote} />
-          <SendQuoteEmailButton
+          <QuoteActions quote={quote} sharePath={sharePath} />          <SendQuoteEmailButton
             quoteId={quote.id}
             disabled={!quote.customer_email}
           />

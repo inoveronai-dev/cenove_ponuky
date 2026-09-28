@@ -9,6 +9,7 @@ import {
   DEMO_PRICING_ID,
   DEMO_USER_ID,
 } from "@/lib/demo/mode";
+import { persistPublicSnapshot } from "@/lib/demo/public-snapshot";
 import {
   calculateQuoteEstimate,
   DEFAULT_PRICING,
@@ -278,26 +279,13 @@ async function readCookieStore(): Promise<DemoStore | null> {
 
 async function writeCookieStore(store: DemoStore) {
   try {
-    const packed = compressStore(store);
+    const forCookie = slimStoreForCookie(store);
+    const packed = compressStore(forCookie);
     if (packed.length > COOKIE_MAX) {
-      // Prefer keeping latest quotes so newly created public links work
-      const slim: DemoStore = {
-        ...store,
-        quote_views: [],
-        quote_versions: [],
-        notifications: [],
-        quotes: store.quotes.slice(0, 8),
-      };
-      const packedSlim = compressStore(slim);
-      if (packedSlim.length > COOKIE_MAX) return;
-      const jar = await cookies();
-      jar.set(COOKIE_NAME, packedSlim, {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.VERCEL === "1",
-        maxAge: 60 * 60 * 24 * 30,
-      });
+      console.error(
+        "Demo cookie still too large after slim:",
+        packed.length
+      );
       return;
     }
     const jar = await cookies();
@@ -311,6 +299,24 @@ async function writeCookieStore(store: DemoStore) {
   } catch (err) {
     console.error("Demo cookie write failed:", err);
   }
+}
+
+function slimStoreForCookie(store: DemoStore): DemoStore {
+  const quotes = store.quotes.slice(0, 6).map((q) => ({
+    ...q,
+    internal_notes: null,
+    ai_intro: q.ai_intro ? q.ai_intro.slice(0, 400) : null,
+    ai_summary: q.ai_summary ? q.ai_summary.slice(0, 300) : null,
+    ai_scope_note: q.ai_scope_note ? q.ai_scope_note.slice(0, 200) : null,
+    customer_notes: q.customer_notes ? q.customer_notes.slice(0, 160) : null,
+  }));
+  return {
+    ...store,
+    quotes,
+    quote_views: [],
+    quote_versions: [],
+    notifications: [],
+  };
 }
 
 function normalizeQuotes(store: DemoStore): DemoStore {
@@ -338,13 +344,15 @@ function normalizeQuotes(store: DemoStore): DemoStore {
 }
 
 async function ensureLoaded(): Promise<DemoStore> {
-  if (g.__movequoteDemoStore) return g.__movequoteDemoStore;
-
+  // Cookie is the durable source for this browser on Vercel — prefer it
+  // over in-memory seed from another request on the same instance.
   const fromCookie = await readCookieStore();
   if (fromCookie) {
     g.__movequoteDemoStore = normalizeQuotes(fromCookie);
     return g.__movequoteDemoStore;
   }
+
+  if (g.__movequoteDemoStore) return g.__movequoteDemoStore;
 
   try {
     const raw = await fs.readFile(storePath(), "utf8");
@@ -364,9 +372,21 @@ async function ensureLoaded(): Promise<DemoStore> {
   }
 }
 
+async function persistPublicQuotes(store: DemoStore) {
+  for (const quote of store.quotes.slice(0, 12)) {
+    if (quote.archived_at) continue;
+    try {
+      await persistPublicSnapshot({ quote, company: store.company });
+    } catch (err) {
+      console.error("Public snapshot persist failed:", err);
+    }
+  }
+}
+
 async function persist(store: DemoStore) {
   g.__movequoteDemoStore = store;
   await writeCookieStore(store);
+  await persistPublicQuotes(store);
 
   g.__movequoteDemoWriteQueue = (g.__movequoteDemoWriteQueue || Promise.resolve())
     .then(async () => {

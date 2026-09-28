@@ -19,11 +19,14 @@ export const dynamic = "force-dynamic";
 
 export default async function PublicQuotePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ publicId: string }>;
+  searchParams: Promise<{ d?: string }>;
 }) {
   const { publicId } = await params;
-  const result = await getPublicQuoteByPublicId(publicId);
+  const { d } = await searchParams;
+  const result = await getPublicQuoteByPublicId(publicId, d);
 
   if (!result) {
     return (
